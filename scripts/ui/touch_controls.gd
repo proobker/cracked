@@ -16,8 +16,13 @@ var _buttons: Array[Dictionary] = [
 	{"action": &"crouch", "label": "SLIDE", "offset": Vector2(-205, -66), "r": 44.0},
 	{"action": &"dash", "label": "DASH", "offset": Vector2(-310, -96), "r": 44.0},
 	{"action": &"reload", "label": "R", "offset": Vector2(-78, -320), "r": 36.0},
+	{"action": &"swap", "label": "SWAP", "offset": Vector2(-178, -345), "r": 38.0},
+	{"action": &"scope", "label": "SCOPE", "offset": Vector2(-300, -252), "r": 38.0},
 	{"action": &"pause", "label": "II", "offset": Vector2(0, 92), "r": 30.0, "top": true},
 ]
+
+## Optional: lets buttons show when they are unavailable.
+var player: Player
 
 var _stick_finger := -1
 var _stick_origin := Vector2.ZERO
@@ -27,13 +32,24 @@ var _button_fingers := {} # finger index -> action
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = DisplayServer.is_touchscreen_available()
 
 
+func _process(_delta: float) -> void:
+	if visible and player:
+		queue_redraw()
+
+
 func _exit_tree() -> void:
 	reset()
+
+
+## Hidden under overlays (pause, death, win) so no button sits on top of
+## theirs. Only ever shown on a touchscreen.
+func set_shown(shown: bool) -> void:
+	visible = shown and DisplayServer.is_touchscreen_available()
 
 
 ## Releases every held finger. Called on pause so nothing stays pressed.
@@ -108,6 +124,18 @@ func _on_up(finger: int) -> void:
 	queue_redraw()
 
 
+## 1.0 when the action can be used now; a fraction while it recharges.
+func _ready_fraction(action: StringName) -> float:
+	if player == null:
+		return 1.0
+	match action:
+		&"dash":
+			return player.dash_ready_fraction()
+		&"scope":
+			return 1.0 if player.weapon.can_scope else 0.0
+	return 1.0
+
+
 func _center(b: Dictionary) -> Vector2:
 	var offset: Vector2 = b["offset"] * Tuning.touch_scale
 	if b.get("top", false):
@@ -122,8 +150,12 @@ func _draw() -> void:
 		var c := _center(b)
 		var r: float = float(b["r"]) * Tuning.touch_scale
 		var held: bool = _button_fingers.values().has(b["action"])
+		var ready := _ready_fraction(b["action"])
+		var ring := Color(0.3, 0.95, 1.0, alpha * (1.0 if ready >= 1.0 else 0.35))
 		draw_circle(c, r, Color(1, 1, 1, alpha * (0.5 if held else 0.18)))
-		draw_arc(c, r, 0.0, TAU, 48, Color(0.3, 0.95, 1.0, alpha), 3.0)
+		draw_arc(c, r, 0.0, TAU, 48, ring, 3.0)
+		if ready < 1.0 and ready > 0.0:
+			draw_arc(c, r, -PI / 2.0, -PI / 2.0 + TAU * ready, 48, Color(0.3, 0.95, 1.0, alpha), 3.0)
 		var label: String = b["label"]
 		var font_size := 18
 		var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)

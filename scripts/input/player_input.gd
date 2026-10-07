@@ -38,6 +38,15 @@ func _ready() -> void:
 	_button("reload", JOY_BUTTON_X)
 	_mouse("fire", MOUSE_BUTTON_LEFT)
 	_axis("fire", JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_key("swap", KEY_TAB)
+	_mouse("swap", MOUSE_BUTTON_WHEEL_DOWN)
+	_mouse("swap", MOUSE_BUTTON_WHEEL_UP)
+	_button("swap", JOY_BUTTON_Y)
+	_key("weapon_1", KEY_1)
+	_key("weapon_2", KEY_2)
+	_key("weapon_3", KEY_3)
+	_mouse("scope", MOUSE_BUTTON_RIGHT)
+	_axis("scope", JOY_AXIS_TRIGGER_LEFT, 1.0)
 	_key("pause", KEY_ESCAPE)
 	_button("pause", JOY_BUTTON_START)
 
@@ -55,7 +64,7 @@ func wants_sprint() -> bool:
 ## Returns this frame's look in degrees and clears the accumulator.
 func consume_look(delta: float) -> Vector2:
 	var pad := Input.get_vector("look_left", "look_right", "look_up", "look_down")
-	var out: Vector2 = _look_accum + pad * Tuning.pad_look_deg_per_sec * delta
+	var out: Vector2 = (_look_accum + pad * Tuning.pad_look_deg_per_sec * delta) * Tuning.sensitivity
 	_look_accum = Vector2.ZERO
 	return out
 
@@ -96,8 +105,13 @@ func _key(action: StringName, keycode: Key) -> void:
 	InputMap.action_add_event(action, ev)
 
 
+## Mouse bindings exist for editor testing only. On a touchscreen, touches
+## are also emulated as mouse clicks (so menus work), and a touch must never
+## fire the gun.
 func _mouse(action: StringName, button: MouseButton) -> void:
 	_ensure(action)
+	if DisplayServer.is_touchscreen_available():
+		return
 	var ev := InputEventMouseButton.new()
 	ev.button_index = button
 	InputMap.action_add_event(action, ev)

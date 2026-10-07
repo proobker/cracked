@@ -6,6 +6,9 @@ extends CharacterBody3D
 signal health_changed(health: float, max_health: float)
 signal damaged
 signal died(cause: String)
+## Re-emitted for the equipped weapon only, and on every swap.
+signal weapon_changed(weapon: Weapon)
+signal shot_result(result: String)
 
 const STAND_EYE := 1.6
 const LOW_EYE := 1.0
@@ -15,6 +18,8 @@ var dead := false
 var head: Node3D
 var camera: Camera3D
 var weapon: Weapon
+var weapons: Array[Weapon] = []
+var _slot := 0
 
 var sprinting := false
 var sliding := false
@@ -52,9 +57,15 @@ func _ready() -> void:
 	head.add_child(camera)
 	camera.make_current()
 
-	weapon = Rifle.new()
-	weapon.camera = camera
-	camera.add_child(weapon)
+	for w: Weapon in [Rifle.new(), Shotgun.new(), Marksman.new()]:
+		w.camera = camera
+		camera.add_child(w)
+		w.ammo_changed.connect(_on_weapon_ammo)
+		w.fired.connect(func(result: String) -> void: shot_result.emit(result))
+		w.set_equipped(false)
+		weapons.append(w)
+	weapon = weapons[0]
+	weapon.set_equipped(true)
 
 
 func _physics_process(delta: float) -> void:
@@ -85,6 +96,7 @@ func _physics_process(delta: float) -> void:
 		_dash_left = Tuning.dash_duration
 		_iframes_left = Tuning.dash_iframes
 		_dash_cooldown_left = Tuning.dash_cooldown # longer than the dash: no chaining
+		Audio.play(&"dash")
 
 	if Input.is_action_just_pressed("crouch") and not sliding:
 		var flat := Vector3(velocity.x, 0.0, velocity.z)
@@ -131,7 +143,12 @@ func _physics_process(delta: float) -> void:
 	var eye: float = LOW_EYE if (crouched or sliding) else STAND_EYE
 	head.position.y = move_toward(head.position.y, eye, 6.0 * delta)
 
-	weapon.tick(delta, Input.is_action_pressed("fire"), Input.is_action_just_pressed("reload"), crouched)
+	_weapon_input()
+	var kick := weapon.tick(delta, Input.is_action_pressed("fire"), Input.is_action_just_pressed("reload"), crouched)
+	if kick > 0.0:
+		head.rotation.x = clampf(head.rotation.x + deg_to_rad(kick), -1.5, 1.5)
+	var fov: float = weapon.scoped_fov if weapon.scoped else Tuning.fov
+	camera.fov = move_toward(camera.fov, fov, 300.0 * delta)
 
 
 func take_damage(amount: float, source: String) -> void:
@@ -139,6 +156,7 @@ func take_damage(amount: float, source: String) -> void:
 		return
 	health = maxf(0.0, health - amount)
 	_since_damage = 0.0
+	Audio.play(&"hurt")
 	damaged.emit()
 	health_changed.emit(health, Tuning.max_health)
 	if health <= 0.0:
@@ -146,8 +164,55 @@ func take_damage(amount: float, source: String) -> void:
 		died.emit(_cause_of_death(source))
 
 
-func collect_ammo(amount: int) -> void:
-	weapon.add_ammo(amount)
+func collect_ammo(kind: StringName, amount: int) -> void:
+	for w in weapons:
+		if w.kind == kind:
+			w.add_ammo(amount)
+
+
+func weapon_by_kind(kind: StringName) -> Weapon:
+	for w in weapons:
+		if w.kind == kind:
+			return w
+	return weapons[0]
+
+
+func equip(slot: int) -> void:
+	if slot == _slot or slot < 0 or slot >= weapons.size():
+		return
+	weapon.set_equipped(false)
+	_slot = slot
+	weapon = weapons[slot]
+	weapon.set_equipped(true)
+	Audio.play(&"swap")
+	weapon_changed.emit(weapon)
+
+
+## Swap goes to the next weapon that can still shoot, so a dry gun costs one
+## tap, not a hunt (§5). If every gun is dry, it simply cycles.
+func swap_next() -> void:
+	for step in range(1, weapons.size()):
+		var slot := (_slot + step) % weapons.size()
+		if not weapons[slot].is_dry():
+			equip(slot)
+			return
+	equip((_slot + 1) % weapons.size())
+
+
+func _weapon_input() -> void:
+	if Input.is_action_just_pressed("swap"):
+		swap_next()
+	for i in weapons.size():
+		if Input.is_action_just_pressed("weapon_%d" % (i + 1)):
+			equip(i)
+	if Input.is_action_just_pressed("scope") and weapon.can_scope and not weapon.reloading:
+		weapon.scoped = not weapon.scoped
+		weapon_changed.emit(weapon)
+
+
+func _on_weapon_ammo(w: Weapon) -> void:
+	if w == weapon:
+		weapon_changed.emit(w)
 
 
 func is_dashing() -> bool:
@@ -162,6 +227,8 @@ func _look(delta: float) -> void:
 	var look: Vector2 = PlayerInput.consume_look(delta)
 	if Tuning.aim_assist_strength > 0.0 and _enemy_under_crosshair():
 		look *= 1.0 - Tuning.aim_assist_strength
+	if weapon.scoped:
+		look *= Tuning.scoped_look_scale
 	rotate_y(deg_to_rad(-look.x))
 	head.rotation.x = clampf(head.rotation.x - deg_to_rad(look.y), -1.5, 1.5)
 

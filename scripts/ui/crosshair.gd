@@ -9,6 +9,8 @@ const MARKERS := {
 	"kill": {"color": Color(1.0, 0.15, 0.3), "size": 16.0, "time": 0.3},
 }
 
+## Scoped: a dark scope ring and a fine crosshair instead of the open one.
+var scoped := false
 var _marker := ""
 var _marker_left := 0.0
 
@@ -33,10 +35,19 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var c := size / 2.0
 	var white := Color(1, 1, 1, 0.85)
-	draw_line(c + Vector2(-10, 0), c + Vector2(-4, 0), white, 2.0)
-	draw_line(c + Vector2(4, 0), c + Vector2(10, 0), white, 2.0)
-	draw_line(c + Vector2(0, -10), c + Vector2(0, -4), white, 2.0)
-	draw_line(c + Vector2(0, 4), c + Vector2(0, 10), white, 2.0)
+	if scoped:
+		var r := size.y * 0.46
+		# Darken everything outside the scope circle with a thick ring.
+		draw_arc(c, r + size.x * 0.5, 0.0, TAU, 96, Color(0, 0, 0, 0.88), size.x, true)
+		draw_arc(c, r, 0.0, TAU, 96, Color(0.75, 0.4, 1.0, 0.9), 3.0, true)
+		draw_line(c + Vector2(-r, 0), c + Vector2(r, 0), Color(0, 0, 0, 0.7), 1.5)
+		draw_line(c + Vector2(0, -r), c + Vector2(0, r), Color(0, 0, 0, 0.7), 1.5)
+		draw_circle(c, 2.0, Color(1.0, 0.2, 0.4))
+	else:
+		draw_line(c + Vector2(-10, 0), c + Vector2(-4, 0), white, 2.0)
+		draw_line(c + Vector2(4, 0), c + Vector2(10, 0), white, 2.0)
+		draw_line(c + Vector2(0, -10), c + Vector2(0, -4), white, 2.0)
+		draw_line(c + Vector2(0, 4), c + Vector2(0, 10), white, 2.0)
 	if _marker_left > 0.0:
 		var spec: Dictionary = MARKERS[_marker]
 		var col: Color = spec["color"]

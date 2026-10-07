@@ -1,8 +1,11 @@
 class_name AmmoPickup
 extends Area3D
-## Ammo dropped by a kill (§5). Walk over it to collect.
+## Ammo dropped by a kill (§5), colored by the weapon it feeds. Walk over it
+## to collect.
 
-var amount := 15
+var kind := &"rifle"
+var amount := 20
+var color := Color(0.3, 1.0, 0.4)
 var _mesh: MeshInstance3D
 
 
@@ -22,10 +25,10 @@ func _ready() -> void:
 	box.size = Vector3(0.35, 0.2, 0.25)
 	_mesh.mesh = box
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.3, 1.0, 0.4)
+	mat.albedo_color = color
 	mat.emission_enabled = true
-	mat.emission = Color(0.3, 1.0, 0.4)
-	mat.emission_energy_multiplier = 2.0
+	mat.emission = color
+	mat.emission_energy_multiplier = 2.5
 	_mesh.material_override = mat
 	add_child(_mesh)
 
@@ -37,6 +40,7 @@ func _process(delta: float) -> void:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if body.has_method("collect_ammo"):
-		body.collect_ammo(amount)
+	if body is Player:
+		(body as Player).collect_ammo(kind, amount)
+		Audio.play(&"pickup")
 		queue_free()

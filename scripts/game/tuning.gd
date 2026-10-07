@@ -1,6 +1,24 @@
 extends Node
 ## Every number plans.md says is found by playing, not by deciding (§14).
-## One place to change them. Autoloaded as `Tuning`.
+## One place to change them. Autoloaded as `Tuning`. The player-facing
+## subset (§11 settings) is saved to user://settings.cfg.
+
+const SETTINGS_PATH := "user://settings.cfg"
+## Settings a player can change, with their allowed ranges.
+const SETTINGS := {
+	"sensitivity": [0.3, 3.0],
+	"fov": [70.0, 100.0],
+	"aim_assist_strength": [0.0, 0.7],
+	"touch_scale": [0.7, 1.4],
+	"touch_opacity": [0.15, 0.9],
+	"master_volume": [0.0, 1.0],
+	"music_volume": [0.0, 1.0],
+}
+
+# Settings (§11)
+var sensitivity := 1.0 # multiplies every look source
+var master_volume := 0.9
+var music_volume := 0.6
 
 # Camera and aim (§4)
 var mouse_sens_deg_per_px := 0.12 # editor testing only
@@ -9,6 +27,7 @@ var pad_look_deg_per_sec := 200.0
 var aim_assist_strength := 0.4 # fraction of look speed removed on target; 0 = off
 var aim_assist_angle_deg := 3.5
 var fov := 85.0
+var scoped_look_scale := 0.35
 
 # Movement (§4)
 var walk_speed := 7.0
@@ -47,3 +66,24 @@ var walk_in_delay := 0.6
 # Touch controls (§9)
 var touch_opacity := 0.45
 var touch_scale := 1.0
+
+
+func _ready() -> void:
+	load_settings()
+
+
+func load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return
+	for key: String in SETTINGS:
+		var range_: Array = SETTINGS[key]
+		var value: float = cfg.get_value("settings", key, get(key))
+		set(key, clampf(value, range_[0], range_[1]))
+
+
+func save_settings() -> void:
+	var cfg := ConfigFile.new()
+	for key: String in SETTINGS:
+		cfg.set_value("settings", key, get(key))
+	cfg.save(SETTINGS_PATH)
