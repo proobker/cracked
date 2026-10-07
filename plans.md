@@ -2,7 +2,8 @@
 
 > **A 3d FPS.** A neon-lit death run, twenty waves deep.
 >
-> **Status:** pre-initial. Design locked, first slice being scaffolded.
+> **Status:** v1 built (1.0.0, debug-signed APK). Design locked; tuning
+> by play is next.
 >
 > **Platform changed 2026-10-07:** browser + mouse and keyboard → native
 > Android, touch with optional gamepad. Every section that depended on the
@@ -352,11 +353,13 @@ reload — those would all dissolve the layer the plan just built.
 
 Two rules keep it from becoming frustration instead of tension:
 
-- **Weapons are droppable and instant.** A player carrying a dry shotgun
-  can put it on the ground and pick up what they can actually use in a
-  frame. This is what makes §5's "worse than no shotgun" line true rather
-  than merely clever, and it is the cheapest possible answer to a bad
-  state.
+- **Swapping away from a dry weapon is instant.** The player carries all
+  three guns, and the swap goes straight to the next one that can still
+  shoot, so a dry shotgun costs one tap, not a hunt. *Decided in the build:*
+  this replaces "droppable". With all three carried, dropping a gun only
+  adds a pickup to manage, and the bad state it answered is answered in
+  one frame anyway. "Worse than no shotgun" still holds: a dry gun is dead
+  weight you have to swap past, and the HUD marks it red.
 - **A dry trigger is never a surprise.** The weapon tells you it is empty
   before you commit to the shot, and it will not click on a trigger pull
   with a reload already in progress. The player is always choosing to be
@@ -627,6 +630,10 @@ whole plaza from any point in it with a single turn, the minimap goes.**
 On a phone the test is stricter. Screen space is scarcer, and a turn is
 a swipe rather than a flick, so the minimap has to pass the test *and*
 find a corner that no thumb covers.
+
+**Decided: the minimap is cut.** The plaza is 44 m square with cover no
+taller than a person, and the whole of it is visible from any point with
+one turn. By the test above, the minimap goes.
 §11 lists it conditionally for exactly this reason — "done" must not
 include an element the plan already expects to remove.
 
@@ -679,7 +686,8 @@ complete game.
 - Pause on backgrounding, and resume to a paused run (§13)
 - One map: walled rooftop plaza, cyberpunk skyline backdrop
 - Movement: sprint, jump, crouch, slide, dash — with dash invulnerability
-- Three weapons: rifle, shotgun, marksman, with real magazines, droppable
+- Three weapons: rifle, shotgun, marksman, with real magazines, instant
+  swap past a dry gun (§5)
 - Three enemy types: rusher, shooter, heavy
 - Heavy weak point, with its own hitmarker
 - Twenty waves in four phases, then a boss built to §7's floor
@@ -689,7 +697,7 @@ complete game.
 - Health with ~5s regen, instant death, instant restart
 - Score with the stepped combo bleed and full reset from §8
 - HUD: crosshair with hit, weak-point, and kill markers; health, ammo,
-  wave counter, combo, score; minimap only if §9's test fails
+  wave counter, combo, score; no minimap (§9's test cut it)
 - Death screen naming the cause of death
 - A practice range, so three weapons can be learned without a 10-minute
   run in the way
@@ -838,7 +846,8 @@ Undecided, in no particular order:
 - The grace window's length and the size of a combo step (§8)
 - Dash invulnerability's duration, and the cooldown that gates it (§4)
 - The concurrent enemy cap, which the frame budget will end up deciding
-- Whether the music changes at the boss, or only in intensity
+- ~~Whether the music changes at the boss~~ — decided: it changes, to its
+  own track. Waves 1–19 intensify one track by opening a filter.
 - Menu, and anything adjustable beyond §11's settings list (invert,
   left-handed layout, button repositioning)
 - Aim assist strength by default, and whether it differs per weapon (§4)

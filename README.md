@@ -5,57 +5,77 @@ The design is in [plans.md](plans.md); read it before adding anything.
 
 ## Status
 
-First playable slice: the plaza blockout, all five moves, the rifle, rushers,
-waves 1–4, the combo, health regen, the HUD, touch and gamepad controls, and
-the death screen. Everything else in plans.md §11 is still to build.
+v1.0.0, the §11 finish line. One plaza, five moves, three guns (rifle,
+shotgun, marksman), three enemy types plus the wave-20 boss, twenty waves,
+the combo, regen, the HUD with hit / weak-point / kill markers, audio,
+touch and gamepad controls, settings, a practice range, and a menu. Builds
+to a debug-signed APK. Next comes tuning by play, on a real phone.
+
+## Install on a phone
+
+1. Get `build/cracked-1.0.0.apk` (build it as below).
+2. On the phone, allow installs from unknown sources for your file manager,
+   or use USB debugging and run `adb install -r build/cracked-1.0.0.apk`.
+
+The APK is **debug-signed**. Before a store release it needs a release
+keystore, and a release-signed build can't upgrade a debug install (you'd
+uninstall first).
+
+## Controls
+
+| Action | Touch | Gamepad | Keyboard / mouse (desktop testing) |
+|---|---|---|---|
+| Move | Left stick (appears under your thumb) | Left stick | WASD |
+| Sprint | Push the stick past its ring | Left stick click | Shift |
+| Look | Drag the right half of the screen | Right stick | Mouse |
+| Fire | FIRE (you can drag on it to aim) | Right trigger | Left mouse |
+| Jump | JUMP | A | Space |
+| Crouch / slide | SLIDE (slides while sprinting) | B | C or Ctrl |
+| Dash | DASH | Right bumper | Q |
+| Reload | R | X | R |
+| Swap weapon | SWAP (skips dry guns) | Y | Tab, wheel, 1/2/3 |
+| Scope (marksman) | SCOPE | Left trigger | Right mouse |
+| Pause | II | Start | Esc |
 
 ## Requirements
 
-- [Godot 4.4+](https://godotengine.org/download) (standard build, not .NET)
-- For Android export: Android SDK (platform-tools, build-tools, an NDK) and
-  JDK 17
+- [Godot 4.7](https://godotengine.org/download) (standard build, not .NET)
+- For Android export: Android SDK (platform-tools, build-tools) and JDK 17
 
-## Run
+## Run on desktop
 
-Open `project.godot` in Godot and press F5. On desktop, keyboard and mouse
-stand in for touch so you can test in the editor:
+Open `project.godot` in Godot and press F5, or run `godot --path .`.
 
-| Action | Keys |
-|---|---|
-| Move / look | WASD / mouse |
-| Sprint | Shift (forward only) |
-| Jump | Space |
-| Crouch, or slide while sprinting | C or Ctrl |
-| Dash | Q |
-| Fire / reload | Left mouse / R |
-| Pause | Esc |
-
-A gamepad works on both desktop and Android.
-
-## Export to Android
+## Build the APK
 
 1. In Godot: **Editor → Manage Export Templates → Download and Install**.
 2. **Editor Settings → Export → Android**: set the Android SDK path
-   (`%LOCALAPPDATA%\Android\Sdk`) and the Java SDK path (a JDK 17).
-3. **Project → Export → Add… → Android**. Name the preset `Android`. Godot
-   creates a debug keystore for you.
-4. Plug in a phone with USB debugging on and click the one-click deploy
-   button in the editor's top-right. Or build an APK from the command line:
+   (`%LOCALAPPDATA%\Android\Sdk`) and the Java SDK path (a JDK 17). Godot
+   creates the debug keystore itself.
+3. The `Android` preset is already in `export_presets.cfg` (package
+   `com.proobker.cracked`, arm64-v8a + x86_64, landscape, immersive).
 
-   ```sh
-   godot --headless --export-debug "Android" build/cracked.apk
-   adb install -r build/cracked.apk
-   ```
+```sh
+godot --headless --export-debug "Android" build/cracked-1.0.0.apk
+```
 
 ## Layout
 
 ```
-scenes/main.tscn            entry scene; scripts/game/main.gd builds the rest
-scripts/game/               main, tuning (every tunable), wave director, score, pickups
+scenes/menu.tscn            title screen (main scene)
+scenes/main.tscn            a run or the practice range; scripts/game/main.gd builds it
+scripts/game/               main, tuning (every tunable + saved settings), audio,
+                            wave director (all 20 waves), score, pickups
 scripts/input/              the single input layer: touch, gamepad, keyboard → intents
-scripts/player/             movement, health, aim assist
-scripts/weapons/            weapon base + rifle
-scripts/enemies/            rusher
+scripts/player/             movement, health, aim assist, weapon slots
+scripts/weapons/            weapon base, rifle, shotgun, marksman
+scripts/enemies/            enemy base, rusher, shooter, heavy, boss, projectile
 scripts/world/              the plaza blockout and skyline
-scripts/ui/                 HUD, crosshair and markers, touch controls
+scripts/ui/                 HUD, crosshair and markers, touch controls, menu, settings
+audio/                      CC0 sound and music, see CREDITS.md
+android_icons/              adaptive launcher icon layers
 ```
+
+## Credits
+
+All sound and music is CC0. See [CREDITS.md](CREDITS.md).
