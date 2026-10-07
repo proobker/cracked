@@ -22,3 +22,13 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 *.swp
+
+# Godot
+.godot/
+*.apk
+*.aab
+*.idsig
+*.keystore
+*.jks
+export_credentials.cfg
+android/build/
