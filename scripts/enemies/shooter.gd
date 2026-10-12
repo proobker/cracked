@@ -23,16 +23,22 @@ func _configure() -> void:
 	speed = 4.0
 	turn_rate = 4.0
 	points = 150
-	radius = 0.35
+	# An eye drone: it hovers at head height, so its hitbox is a sphere up
+	# there and nothing below it.
+	model_path = "res://models/enemies/Enemy_EyeDrone.gltf"
+	model_scale = 1.1
+	flying = true
+	radius = 0.55
 	height = 2.1
 
 
 func _build_body(parent: Node3D) -> void:
 	super(parent)
-	_visor(parent, 0.5, 1.75, -0.32)
-	var gun := BoxMesh.new()
-	gun.size = Vector3(0.12, 0.12, 0.7)
-	_mesh(parent, gun, Vector3(0.38, 1.2, -0.35), _glow_mat(color, 1.2))
+	if _model == null:
+		_visor(parent, 0.5, 1.75, -0.32)
+		var gun := BoxMesh.new()
+		gun.size = Vector3(0.12, 0.12, 0.7)
+		_mesh(parent, gun, Vector3(0.38, 1.2, -0.35), _glow_mat(color, 1.2))
 
 
 func _act(delta: float, to: Vector3) -> Vector3:
@@ -45,12 +51,16 @@ func _act(delta: float, to: Vector3) -> Vector3:
 	if sees and _fire_left <= WINDUP and not _winding:
 		_winding = true
 		_set_glow(3.5)
+		if _model:
+			_model.action(&"Charging")
 	if _fire_left <= 0.0:
 		_winding = false
 		_set_glow(1.2)
 		_fire_left = FIRE_INTERVAL
 		if sees and not target.dead:
 			_fire_projectile(eye, aim, BOLT_DAMAGE, BOLT_SPEED)
+			if _model:
+				_model.action(&"Attack")
 
 	if dist > RANGE_MAX or not sees:
 		return to

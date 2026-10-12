@@ -18,11 +18,17 @@ func _configure() -> void:
 	speed = 5.5
 	turn_rate = 2.4
 	points = 100
+	# A four-legged runner: low and wide, so the capsule is too.
+	model_path = "res://models/enemies/Enemy_QuadShell.gltf"
+	model_scale = 0.8
+	radius = 0.6
+	height = 1.3
 
 
 func _build_body(parent: Node3D) -> void:
 	super(parent)
-	_visor(parent, 0.6, 1.45, -0.4)
+	if _model == null:
+		_visor(parent, 0.6, 1.45, -0.4)
 
 
 func _act(delta: float, to: Vector3) -> Vector3:
@@ -30,5 +36,7 @@ func _act(delta: float, to: Vector3) -> Vector3:
 	if to.length() < MELEE_RANGE and _melee_left <= 0.0 and not target.dead:
 		target.take_damage(MELEE_DAMAGE, display_name)
 		Audio.play_at(&"melee", global_position)
+		if _model:
+			_model.action(&"Attack")
 		_melee_left = MELEE_COOLDOWN
 	return to

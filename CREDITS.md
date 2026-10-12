@@ -4,6 +4,20 @@ All third-party assets in `cracked` are public domain
 ([CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)). Credit is
 not required by the license; it is given anyway.
 
+## Enemy models (`models/enemies/`)
+
+By [Quaternius](https://quaternius.com), from the free edition of the
+[Sci-Fi Essentials Kit](https://quaternius.itch.io/sci-fi-essentials-kit).
+The models, their animations and their textures are unchanged. The game
+tints them in each enemy's colour at runtime.
+
+| File | Enemy |
+|---|---|
+| `Enemy_QuadShell.gltf` | rusher |
+| `Enemy_EyeDrone.gltf` | shooter |
+| `Enemy_Trilobite.gltf` | heavy, and the boss at 1.35x |
+| `T_Enemies_*.png` | their textures |
+
 ## Music (`audio/music/`)
 
 | File | Track | Author | Source |

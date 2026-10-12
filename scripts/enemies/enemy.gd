@@ -2,8 +2,9 @@ class_name Enemy
 extends CharacterBody3D
 ## Shared enemy body (§6). Telegraphs before it can act or be hit (§2), aims
 ## at where the player *is* (§4), turns at a limited rate so it commits to a
-## path, and takes no cover. Subclasses set numbers, build a silhouette, and
-## decide what to do each tick in _act().
+## path, and takes no cover. Subclasses set numbers, pick a model, and
+## decide what to do each tick in _act(). The collision shape is fitted to
+## the model, so what you see is what you can hit.
 
 signal died(enemy: Enemy)
 
@@ -18,6 +19,13 @@ var radius := 0.45
 var height := 1.8
 var weak_mult := 3.0
 var telegraph_scale := 1.0
+## The robot to show (EnemyModel); empty, or failing to load, shows the
+## placeholder capsule.
+var model_path := ""
+var model_scale := 1.0
+## Flyers hover: no gravity, and a sphere at the top of `height` instead of
+## a capsule standing on the floor.
+var flying := false
 
 var target: Player
 var health := 0.0
@@ -34,6 +42,7 @@ var _detour_left := 0.0
 var _stagger_left := 0.0
 var _flash_left := 0.0
 var _body: Node3D
+var _model: EnemyModel
 var _glow_mats: Array[StandardMaterial3D] = []
 var _pillar: MeshInstance3D
 var _weak_shape_idx := -1
@@ -49,11 +58,17 @@ func _ready() -> void:
 	collision_mask = 1 | 2 | 4
 
 	var shape := CollisionShape3D.new()
-	var capsule := CapsuleShape3D.new()
-	capsule.radius = radius
-	capsule.height = height
-	shape.shape = capsule
-	shape.position.y = height / 2.0
+	if flying:
+		var sphere := SphereShape3D.new()
+		sphere.radius = radius
+		shape.shape = sphere
+		shape.position.y = height - radius
+	else:
+		var capsule := CapsuleShape3D.new()
+		capsule.radius = radius
+		capsule.height = height
+		shape.shape = capsule
+		shape.position.y = height / 2.0
 	add_child(shape)
 
 	_body = Node3D.new()
@@ -95,7 +110,9 @@ func _physics_process(delta: float) -> void:
 	if dummy:
 		return
 
-	if not is_on_floor():
+	if flying:
+		velocity.y = 0.0
+	elif not is_on_floor():
 		velocity.y -= Tuning.gravity * delta
 
 	var to := target.global_position - global_position
@@ -121,6 +138,8 @@ func _physics_process(delta: float) -> void:
 	velocity.z = _heading.z * spd
 	move_and_slide()
 	_face(to)
+	if _model:
+		_model.locomote(moving, spd / maxf(speed, 0.1))
 
 	# Not pathfinding (§6): an enemy pinned against a wall walks along it for
 	# a moment, toward the player's side, then goes back to walking straight.
@@ -141,6 +160,8 @@ func take_hit(amount: float, shape_idx: int, source: StringName, stagger: float)
 	var weak := shape_idx >= 0 and shape_idx == _weak_shape_idx
 	health -= amount * (weak_mult if weak else 1.0)
 	last_hit_by = source
+	if stagger > 0.0 and _model:
+		_model.action(&"Hit")
 	_stagger_left = maxf(_stagger_left, stagger)
 	_flash_left = 0.06
 	if health <= 0.0:
@@ -162,8 +183,17 @@ func _configure() -> void:
 	pass
 
 
-## Override: build the visible silhouette under parent.
+## Override to add detail: builds the model under parent, or the
+## placeholder capsule when there is no model.
 func _build_body(parent: Node3D) -> void:
+	if model_path != "":
+		_model = EnemyModel.create(model_path, model_scale, color)
+	if _model:
+		parent.add_child(_model)
+		_model.set_glow(1.2)
+		if flying:
+			_model.position.y = height - radius
+		return
 	_mesh(parent, CapsuleMesh.new(), Vector3(0, height / 2.0, 0), _glow_mat(color, 1.2))
 
 
@@ -236,6 +266,8 @@ func _glow_mat(c: Color, energy: float) -> StandardMaterial3D:
 func _set_glow(energy: float) -> void:
 	for mat in _glow_mats:
 		mat.emission_energy_multiplier = energy
+	if _model:
+		_model.set_glow(energy)
 
 
 func _visor(parent: Node3D, width: float, y: float, z: float) -> void:

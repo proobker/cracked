@@ -61,6 +61,7 @@ var first_wave_delay := 3.0
 var interval_seconds := 10.0
 var spawn_telegraph := 0.9
 var min_spawn_distance := 14.0
+var room_spawn_distance := 6.0 # gates sit behind the far wall, so closer is fair
 var walk_in_delay := 0.6
 
 # Touch controls (§9)

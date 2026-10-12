@@ -1,15 +1,15 @@
 class_name Game
 extends Node3D
-## Boots a run or the practice range: builds the plaza, player, systems, and
-## UI, and wires them together. Owns pausing, death, the win, and instant
-## restart (§8).
+## Boots a level or the practice range: builds the rooms (or the plaza),
+## player, systems, and UI, and wires them together. Owns pausing, death,
+## clearing the level, and instant retry (§8).
 
 enum Mode { RUN, PRACTICE }
 
 ## Set by the menu before loading this scene.
 static var mode := Mode.RUN
-## Testing aid: the wave a run starts at.
-static var start_wave := 1
+## The level a run plays, 1–99. Set by the level select.
+static var level := 1
 
 const PRACTICE_DUMMIES := [
 	[&"rusher", Vector3(-5.0, 0.1, 7.0)],
@@ -22,6 +22,7 @@ var _enemies: Node3D
 var _player: Player
 var _score: Score
 var _director: WaveDirector
+var _run: LevelRun
 var _hud: Hud
 var _touch: TouchControls
 var _settings: SettingsPanel
@@ -35,27 +36,30 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = false
 
+	level = clampi(level, 1, Levels.COUNT)
 	_world = Node3D.new()
 	_world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_world)
-	var plaza := Plaza.new()
-	_world.add_child(plaza)
 	_enemies = Node3D.new()
-	_world.add_child(_enemies)
 	_player = Player.new()
-	_player.position = Vector3(0.0, 0.2, 17.0)
+	_director = WaveDirector.new()
+	_director.process_mode = Node.PROCESS_MODE_PAUSABLE
+	_director.player = _player
+	_director.enemy_parent = _enemies
+	if mode == Mode.PRACTICE:
+		_world.add_child(Plaza.new())
+		_player.position = Vector3(0.0, 0.2, 17.0)
+	else:
+		_run = LevelRun.new(level)
+		_run.director = _director
+		_world.add_child(_run)
+		_player.position = _run.start_position()
+	_world.add_child(_enemies)
 	_world.add_child(_player)
 
 	_score = Score.new()
 	_score.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(_score)
-
-	_director = WaveDirector.new()
-	_director.process_mode = Node.PROCESS_MODE_PAUSABLE
-	_director.player = _player
-	_director.spawn_points = plaza.spawn_points()
-	_director.enemy_parent = _enemies
-	_director.start_wave = clampi(start_wave, 1, _director.total_waves())
 	add_child(_director)
 
 	var ui := CanvasLayer.new()
@@ -90,11 +94,13 @@ func _ready() -> void:
 		_director.wave_cleared.connect(_on_wave_cleared)
 		_director.interval_tick.connect(_on_interval_tick)
 		_director.enemy_killed.connect(_on_enemy_killed)
-		_director.all_waves_cleared.connect(_on_all_waves_cleared)
-		_hud.set_wave_text("WAVE %d / %d" % [_director.start_wave - 1, _director.total_waves()])
+		_run.room_started.connect(_on_room_started)
+		_run.room_cleared.connect(_on_room_cleared)
+		_run.level_complete.connect(_on_level_complete)
 		Audio.play_music(&"combat")
-		Audio.set_intensity(0.0)
-		_director.start()
+		_run.start()
+		Audio.set_intensity(_level_intensity())
+		_hud.banner("LEVEL %d" % level, 2.0)
 
 
 func _process(_delta: float) -> void:
@@ -131,14 +137,14 @@ func _set_paused(paused: bool) -> void:
 		_hud.hide_overlay()
 
 
-func _end_run(title: String, body: String) -> void:
+func _end_run(title: String, body: String, buttons: Array) -> void:
 	_over = true
 	get_tree().paused = true
 	_touch.reset()
 	_touch.set_shown(false)
 	_capture_mouse(false)
 	Audio.stop_music()
-	_hud.show_overlay(title, body, [[&"restart", "RESTART"], [&"menu", "MENU"]])
+	_hud.show_overlay(title, body, buttons)
 
 
 func _on_overlay_action(id: StringName) -> void:
@@ -149,6 +155,9 @@ func _on_overlay_action(id: StringName) -> void:
 			_hud.hide_overlay()
 			_settings.open()
 		&"restart":
+			_change_scene("res://scenes/main.tscn")
+		&"next":
+			level += 1
 			_change_scene("res://scenes/main.tscn")
 		&"menu":
 			_change_scene("res://scenes/menu.tscn")
@@ -174,17 +183,32 @@ func _on_player_damaged() -> void:
 
 func _on_player_died(cause: String) -> void:
 	Audio.play(&"lose")
-	var wave_text := "the boss" if _director.is_boss_wave() else "wave %d" % _director.wave
-	_end_run("DEAD", "Reached %s   ·   %d score   ·   x%d best combo\n%s" % [
-		wave_text, _score.score, _score.best, cause,
-	])
+	if mode == Mode.PRACTICE:
+		return
+	var reached := "the boss" if _director.is_boss_wave() else "room %d / %d" % [_run.room_index + 1, _run.room_count()]
+	_end_run("DEAD", "Level %d, %s   ·   %d score   ·   x%d best combo\n%s" % [
+		level, reached, _score.score, _score.best, cause,
+	], [[&"restart", "RETRY"], [&"menu", "MENU"]])
 
 
-func _on_all_waves_cleared() -> void:
+func _on_level_complete() -> void:
 	Audio.play(&"win")
-	_end_run("YOU WIN", "All %d waves cleared, boss included\n%d score   ·   x%d best combo" % [
-		_director.total_waves(), _score.score, _score.best,
-	])
+	var first_clear := level < Levels.COUNT and not Progress.is_unlocked(level + 1)
+	var record := _score.score > Progress.best_for(level)
+	Progress.complete(level, _score.score)
+	PlayGames.level_cleared(level, _score.score)
+	var notes: Array[String] = []
+	if record:
+		notes.append("new best")
+	if first_clear:
+		notes.append("level %d unlocked" % (level + 1))
+	var body := "%d score   ·   x%d best combo" % [_score.score, _score.best]
+	if not notes.is_empty():
+		body += "\n" + "   ·   ".join(notes)
+	if level >= Levels.COUNT:
+		_end_run("ALL 99 CLEARED", body, [[&"restart", "REPLAY"], [&"menu", "MENU"]])
+	else:
+		_end_run("LEVEL %d CLEARED" % level, body, [[&"next", "NEXT LEVEL"], [&"restart", "REPLAY"], [&"menu", "MENU"]])
 
 
 func _on_shot_result(result: String) -> void:
@@ -199,28 +223,56 @@ func _on_combo_lost(full: bool) -> void:
 	Audio.play(&"combo_break" if full else &"combo_step")
 
 
-func _on_wave_started(wave: int, total: int) -> void:
+func _on_room_started(index: int, total: int) -> void:
+	_update_wave_text()
+	if index > 0:
+		_hud.banner("ROOM %d / %d" % [index + 1, total], 1.5)
+
+
+func _on_room_cleared(_index: int, _total: int) -> void:
+	_hud.banner("ROOM CLEARED  ·  DOOR OPEN", 3.0)
+	_hud.set_wave_text("LEVEL %d  ·  MOVE ON" % level)
+
+
+func _on_wave_started(wave: int, _total: int) -> void:
+	_update_wave_text()
 	if _director.is_boss_wave():
-		_hud.set_wave_text("WAVE %d  ·  BOSS" % wave)
 		_hud.banner("THE BOSS", 2.5)
 		Audio.play_music(&"boss")
 		Audio.set_intensity(1.0)
 	else:
-		_hud.set_wave_text("WAVE %d / %d" % [wave, total])
 		_hud.banner("WAVE %d" % wave)
-		Audio.set_intensity(float(wave - 1) / float(total - 2))
+		Audio.set_intensity(_level_intensity())
 	Audio.play(&"wave_start", 0.0)
 
 
 func _on_wave_cleared(_wave: int) -> void:
-	_hud.banner("WAVE CLEARED", 2.0)
+	if _director.wave < _director.total_waves():
+		_hud.banner("WAVE CLEARED", 2.0)
 	Audio.play(&"wave_clear", 0.0)
 
 
 func _on_interval_tick(seconds_left: float) -> void:
 	if seconds_left > 0.0 and seconds_left < 5.0:
-		var next := "THE BOSS" if _director.wave + 1 == _director.total_waves() else "NEXT WAVE"
+		var next := "THE BOSS" if _director.next_is_boss() else "NEXT WAVE"
 		_hud.banner("%s IN %d" % [next, ceili(seconds_left)], 0.2)
+
+
+func _update_wave_text() -> void:
+	var text := "LEVEL %d" % level
+	if _run.room_count() > 1:
+		text += "  ·  ROOM %d / %d" % [_run.room_index + 1, _run.room_count()]
+	if _director.is_boss_wave():
+		text += "  ·  BOSS"
+	else:
+		text += "  ·  WAVE %d / %d" % [maxi(_director.wave, 1), _director.total_waves()]
+	_hud.set_wave_text(text)
+
+
+## Music rises through the 99 levels and through the rooms of each one.
+func _level_intensity() -> float:
+	var through_level := float(_run.room_index) / float(maxi(_run.room_count() - 1, 1))
+	return clampf(0.5 * float(level - 1) / float(Levels.COUNT - 1) + 0.5 * through_level, 0.0, 0.95)
 
 
 ## Score is weighted by enemy and weapon (§8). Ammo drops for the weapon

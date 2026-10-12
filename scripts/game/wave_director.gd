@@ -1,9 +1,9 @@
 class_name WaveDirector
 extends Node
-## Runs the twenty waves and the boss (§2, §7). A wave is a budget (a fixed
-## composition) plus a cap on how many may be alive at once. Spawns are
-## distance-gated and telegraphed. A wave ends when its last enemy dies —
-## never on a timer, and nothing about it changes mid-fight.
+## Runs one room's waves (§2, §7). A wave is a budget (a fixed composition)
+## plus a cap on how many may be alive at once; the specs come from Levels.
+## Spawns are distance-gated and telegraphed. A wave ends when its last enemy
+## dies — never on a timer, and nothing about it changes mid-fight.
 
 signal wave_started(wave: int, total: int)
 signal wave_cleared(wave: int)
@@ -11,43 +11,19 @@ signal interval_tick(seconds_left: float)
 signal enemy_killed(enemy: Enemy)
 signal all_waves_cleared
 
-## Escalation from composition before count (§7). r = rusher, s = shooter,
-## h = heavy, b = boss.
-const WAVES := [
-	# Open: rushers only.
-	{"r": 6, "cap": 3},
-	{"r": 9, "cap": 4},
-	{"r": 12, "cap": 5},
-	{"r": 15, "cap": 6},
-	# Pressure: shooters join.
-	{"r": 10, "s": 2, "cap": 6},
-	{"r": 12, "s": 3, "cap": 6},
-	{"r": 12, "s": 4, "cap": 7},
-	{"r": 14, "s": 4, "cap": 7},
-	{"r": 16, "s": 5, "cap": 8},
-	# Punishment: heavies join. Fewer bodies, more variety.
-	{"r": 8, "s": 3, "h": 1, "cap": 7},
-	{"r": 10, "s": 4, "h": 1, "cap": 8},
-	{"r": 10, "s": 5, "h": 1, "cap": 8},
-	{"r": 12, "s": 5, "h": 2, "cap": 9},
-	{"r": 12, "s": 6, "h": 2, "cap": 9},
-	{"r": 14, "s": 6, "h": 2, "cap": 10},
-	# Breakdown: dense mixes, multiple heavies.
-	{"r": 14, "s": 7, "h": 3, "cap": 10},
-	{"r": 16, "s": 7, "h": 3, "cap": 11},
-	{"r": 16, "s": 8, "h": 4, "cap": 11},
-	{"r": 18, "s": 8, "h": 4, "cap": 12},
-	# Boss: a single entity (§7's floor).
-	{"b": 1, "cap": 1},
-]
-
 enum State { IDLE, INTERVAL, WAVE, DONE }
 
 var player: Player
+## Wave specs: r = rusher, s = shooter, h = heavy, b = boss, cap = alive at once.
+var waves: Array[Dictionary] = []
 var spawn_points: Array[Vector3] = []
 var enemy_parent: Node3D
-## Debug/practice: the first wave to run.
-var start_wave := 1
+## Where enemies belong; one found outside is put back on a spawn point.
+var bounds := AABB(Vector3(-24.0, -5.0, -24.0), Vector3(48.0, 17.0, 48.0))
+var min_spawn_distance := Tuning.min_spawn_distance
+var first_delay := Tuning.first_wave_delay
+## Boss health multiplier, from the level.
+var boss_scale := 1.0
 
 var wave := 0
 var state := State.IDLE
@@ -59,17 +35,21 @@ var _walk_in_left := 0.0
 
 
 func start() -> void:
-	wave = start_wave - 1
+	wave = 0
 	state = State.INTERVAL
-	_interval_left = Tuning.first_wave_delay
+	_interval_left = first_delay
 
 
 func total_waves() -> int:
-	return WAVES.size()
+	return waves.size()
 
 
 func is_boss_wave() -> bool:
-	return wave == WAVES.size()
+	return wave >= 1 and waves[wave - 1].has("b")
+
+
+func next_is_boss() -> bool:
+	return wave < waves.size() and waves[wave].has("b")
 
 
 func _physics_process(delta: float) -> void:
@@ -91,7 +71,7 @@ func _physics_process(delta: float) -> void:
 
 func _begin_wave(n: int) -> void:
 	wave = n
-	var spec: Dictionary = WAVES[n - 1]
+	var spec: Dictionary = waves[n - 1]
 	_queue.clear()
 	for i in int(spec.get("r", 0)):
 		_queue.append(&"rusher")
@@ -109,12 +89,12 @@ func _begin_wave(n: int) -> void:
 	_alive = 0
 	_walk_in_left = 0.0
 	state = State.WAVE
-	wave_started.emit(wave, WAVES.size())
+	wave_started.emit(wave, waves.size())
 
 
 func _clear_wave() -> void:
 	wave_cleared.emit(wave)
-	if wave >= WAVES.size():
+	if wave >= waves.size():
 		state = State.DONE
 		all_waves_cleared.emit()
 	else:
@@ -129,6 +109,8 @@ func _spawn_one() -> bool:
 	if candidates.is_empty():
 		return false
 	var enemy := make_enemy(_queue.pop_front())
+	if enemy is Boss:
+		(enemy as Boss).health_scale = boss_scale
 	enemy.target = player
 	enemy.position = candidates.pick_random()
 	enemy.died.connect(_on_enemy_died)
@@ -140,7 +122,7 @@ func _spawn_one() -> bool:
 func _free_points() -> Array[Vector3]:
 	var free: Array[Vector3] = []
 	for p in spawn_points:
-		if p.distance_to(player.global_position) < Tuning.min_spawn_distance:
+		if p.distance_to(player.global_position) < min_spawn_distance:
 			continue
 		var taken := false
 		for e in enemy_parent.get_children():
@@ -158,8 +140,7 @@ func _rescue_strays() -> void:
 	for e in enemy_parent.get_children():
 		if not e is Enemy:
 			continue
-		var pos := (e as Enemy).global_position
-		if pos.y > 12.0 or pos.y < -5.0 or absf(pos.x) > 24.0 or absf(pos.z) > 24.0:
+		if not bounds.has_point((e as Enemy).global_position):
 			var free := _free_points()
 			if not free.is_empty():
 				(e as Enemy).global_position = free.pick_random()

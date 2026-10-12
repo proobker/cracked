@@ -1,9 +1,16 @@
 # cracked — Design Plan
 
-> **A 3d FPS.** A neon-lit death run, twenty waves deep.
+> **A 3d FPS.** A neon-lit death run, ninety-nine levels deep.
 >
-> **Status:** v1 built (1.0.0, debug-signed APK). Design locked; tuning
-> by play is next.
+> **Status:** v1 built (1.0.0, debug-signed APK). v2 in progress: rooms
+> and levels, robot models, Play Games sign-in.
+>
+> **Structure changed 2026-10-12:** one plaza and twenty waves → 99
+> levels of rectangular rooms, enemies only through the far wall. Robot
+> models replace the capsule placeholders, and Google Play Games sign-in
+> comes in, switched off until configured. §1, §2, §3, §7, §11, §12 and
+> §15 were revised in the same change. The old text's reasoning is kept
+> where it still holds, and each reversal says why it was reversed.
 >
 > **Platform changed 2026-10-07:** browser + mouse and keyboard → native
 > Android, touch with optional gamepad. Every section that depended on the
@@ -39,7 +46,7 @@ that is the point — see §12.
 
 | | |
 |---|---|
-| **Genre** | First-person shooter, wave survival |
+| **Genre** | First-person shooter, room-clearing levels |
 | **Setting** | Stylized low-poly neon cyberpunk city |
 | **Perspective** | First person, touch controls, optional gamepad |
 | **Platform** | Android, native, built in Godot 4. Landscape only |
@@ -59,9 +66,13 @@ the screen while you do it.
 
 Three commitments define the whole project:
 
-1. **One map, done well.** Not a small city, not a level selector. One arena
-   that you learn so well you stop looking at it.
-2. **Twenty waves, then a boss.** A win condition. Endless is a screensaver.
+1. **One room shape, done well.** A walled rectangle, with enemies coming
+   only through the far wall. Every level is built from it, so the room is
+   still the one thing you learn so well you stop looking at it. *(Was:
+   one map. See "Why levels" below.)*
+2. **Ninety-nine levels, each with a clear.** A win condition per level,
+   and a boss every tenth. Endless is still a screensaver. *(Was: twenty
+   waves, then a boss.)*
 3. **Forgiving by design.** Health regen, generous ammo drops, wide net. The
    difficulty comes from how many decisions you have to make per second, not
    from instant death.
@@ -73,6 +84,17 @@ needs a level-design pipeline, scripted pacing, and authored cover. A
 deathmatch needs multiple maps and AI that can path through them. Wave
 survival needs exactly one map done well and enemies that walk at you. It is
 the shape of shooter that can actually be finished.
+
+**Why levels, after all (2026-10-12).** The plaza's weakness in play was
+that it surrounded you: a spawn ring means something is always behind you,
+and on a phone, with a thumb doing the looking, turning around is the
+slowest thing you can do. A rectangle with one dangerous wall turns every
+fight to face the same way. Levels also answer "one more go" better than
+one 15-minute run does. A level is two to six minutes, and a death costs
+one level, not twenty waves. The cost the old text named is avoided
+rather than paid. There is no level-design pipeline: levels are
+*generated* from their number (§3, §7), built from the room and the
+systems that already exist, and the AI still only walks at you.
 
 **Why arena twitch, not grounded tactical.** Grounded tactical in 3D is an
 aiming-sim problem — hit registration, hitboxes, and camera feel all have to
@@ -169,18 +191,51 @@ aggressive line as they get better.
 
 ### Session shape
 
-A full run is **8–15 minutes**: twenty short waves, short breaks, a boss.
-Short enough to replay during a break. Long enough that dying at wave 18
-stings.
+A level is **2–6 minutes**: one to four rooms, one to three waves a room,
+short breaks. Short enough to play one during a break. A death restarts the
+level, not the game, and the next level opens when this one is cleared.
+
+### Levels and rooms
+
+```
+  ROOM 1 ──cleared──▶ door opens ──walk──▶ ROOM 2 ── … ──▶ LEVEL CLEARED
+  (waves)                                  (door locks       (next level
+                                            behind you)        unlocked)
+```
+
+The loop above is what happens *inside* a room. A level chains rooms, and
+the player walks from one to the next through a corridor. The entry door
+locks behind them, so a room is always fought facing one way.
 
 ---
 
 ## 3. The Map
 
-**A single walled rooftop plaza, city skyline behind it.**
+**Rectangular rooms, chained into levels, city skyline behind them.**
+*(Was: a single walled rooftop plaza. The plaza stays as the menu
+backdrop and the practice range.)*
 
-The arena is enclosed by real walls you can see and use for cover. Past the
-walls is a flat backdrop of the cyberpunk city — towers, neon, distant
+### The room
+
+- **A rectangle, 16–24 m wide and 30–46 m long.** You enter at one short
+  wall. Enemies come **only through gates in the far short wall**:
+  alcoves behind the wall line, framed in red light so you always know
+  where the next thing will come from. Nothing spawns at your back. This
+  is the room's one rule, and it is checked in tests.
+- **Cover in the middle band only**, from the same vocabulary as the
+  plaza: low walls to crouch behind, tall blocks to break line of sight.
+  It is kept clear of the side walls and of each other, so a walker never
+  gets trapped (§6).
+- **The entry door locks behind you; the exit door opens on the clear.**
+  An opened door glows cyan. A locked one glows red.
+- **Gates are open to the top** so the boss fits through.
+
+Levels are generated from their number with a seeded random generator, so
+level *n* is always the same level, and nothing about it is stored or
+authored by hand. That is what makes 99 affordable.
+
+The rooms are enclosed by real walls you can see and use for cover. Past
+the walls is a flat backdrop of the cyberpunk city: towers, neon, distant
 signage. The skyline is scenery, not space. You cannot get out there, and
 you never try to.
 
@@ -197,7 +252,10 @@ edges are walls, so the rule is never surprising.
 
 ### Arena qualities to hit
 
-- **Open enough to strafe in a circle.** Never a corridor.
+*Written for the plaza, and still the test for a room.*
+
+- **Open enough to strafe.** A room is a long rectangle, not a corridor.
+  The narrowest is 16 m.
 - **Cover at mid-range.** Enough to break line of sight, not enough to camp
   in. The combo rule is the real anti-camp mechanic; cover is a tool, not a
   hiding place.
@@ -428,16 +486,21 @@ is satisfying to kill. Aggression is a stretch item, not a v1 requirement.
 
 ## 7. Waves
 
-**Twenty waves, then a boss.** Escalation in phases rather than a flat
-difficulty slider:
+**Ninety-nine levels, a boss every tenth.** *(Was: twenty waves, then a
+boss.)* The same four phases, stretched over the levels:
 
-| Phase | Waves | What changes |
-|---|---|---|
-| **Open** | 1–4 | Rushers only. Learn movement, learn the rifle, learn the arena |
-| **Pressure** | 5–9 | Shooters join. Two types at once, mixed composition |
-| **Punishment** | 10–15 | Heavies join. Mixes get worse, not just bigger. Fewer bodies, more variety |
-| **Breakdown** | 16–19 | Dense mixes, multiple heavies, the arena at its worst |
-| **Boss** | 20 | Something that is not a bigger rusher |
+| Phase | Levels | Rooms | What changes |
+|---|---|---|---|
+| **Open** | 1–9 | 1 | Rushers only. Learn movement, learn the rifle, learn the room |
+| **Pressure** | 10–29 | 2 | Shooters join. Two types at once, mixed composition |
+| **Punishment** | 30–59 | 2–3 | Heavies join. Mixes get worse, not just bigger |
+| **Breakdown** | 60–98 | 3–4 | Dense mixes, multiple heavies, up to twelve alive at once |
+| **Boss** | 10, 20 … 90, 99 | last room | The §7 boss. From level 30 a rusher escort walks in with it |
+
+A wave's bodies grow slowly with the level (about one more every six
+levels). A long level is long because it has more rooms, never because
+one wave is padded (§2). Boss health scales with the level: level 20's
+boss is the v1 boss, and level 99's has two and a half times its health.
 
 **Escalation must come from composition before it comes from count.** Ten
 rushers is less interesting and more of the same than six rushers, two
@@ -445,8 +508,9 @@ shooters, and a heavy. Wave 14 should not be wave 9 with bigger numbers.
 
 ### Intervals
 
-Ten seconds between waves. Not a menu — the arena stays live and the
-backdrop stays lit. This is your window to:
+Ten seconds between waves inside a room. Between rooms the breather is the
+walk to the next one, as long as the player likes. Not a menu: the room
+stays live and the backdrop stays lit. This is your window to:
 
 - Reload deliberately instead of mid-wave.
 - Collect the ammo lying around.
@@ -706,6 +770,20 @@ complete game.
 
 Nothing else. Not one more feature.
 
+### v2 — rooms and levels (2026-10-12)
+
+What changed after v1, by decision rather than by drift:
+
+- 99 generated levels of rectangular rooms, enemies only through the far
+  wall (§3, §7). The plaza remains as the menu and the practice range
+- A level select, with progress (the highest open level and the best score
+  per level) saved on the phone
+- Animated robot models in place of the capsules, CC0, with the hitboxes,
+  the weak point and every number unchanged (§6)
+- Google Play Games sign-in, with progress kept in the cloud. It is built
+  in but switched off until the Play Console is set up, and the game
+  never needs it
+
 **Two items on this list are new since the design was first drafted**, and
 they are here because the friction they remove is not a nice-to-have:
 
@@ -729,10 +807,9 @@ In rough priority order:
    whether it is fair, and shipping one honest difficulty beats shipping a
    slider that hides the question.
 2. **Weapon unlocks between runs.** A reward for reaching further.
-3. **A second map.** The single biggest content upgrade available, because
-   the systems already exist to fill it.
+3. ~~**A second map.**~~ Done differently in v2: generated rooms.
 4. **A fourth enemy type.**
-5. **Persisted high scores.** Local, not online.
+5. ~~**Persisted high scores.**~~ Done in v2: best score per level.
 6. **Enemies that strafe or take cover.** The aggressive-AI problem.
 7. **Gyro aim.** Fine aim by tilting the phone, on top of drag-look.
 8. **A Play Store release.** Listing, content rating, store policies.
@@ -741,9 +818,10 @@ In rough priority order:
 
 Explicitly out of reach for now, listed so it is not re-proposed as if it
 were new: multiplayer, weapon upgrades and attachments, skill trees,
-cutscenes and story, online leaderboards, vehicles, slow-motion, melee,
-multiple maps as a campaign, a progression-based economy, iOS, and a
-desktop or browser build.
+cutscenes and story, vehicles, slow-motion, melee, a progression-based
+economy, iOS, and a desktop or browser build. (Multiple maps as a campaign
+came in with v2's levels. Online leaderboards have hooks in place, which
+do nothing until IDs exist.)
 
 ---
 
@@ -754,7 +832,7 @@ Every item here sounds good. That is precisely why it is written down.
 | Cut | Why |
 |---|---|
 | **Multiplayer** | Doubles the design work and adds a second game to keep balanced |
-| **More than one map in v1** | One arena is the commitment. A second is stretch, a fifth is a different project |
+| **Hand-built levels** | 99 authored levels is a different project. Levels are generated from one room design (§3) |
 | **More than 3 weapons or 3 enemy types in v1** | Breadth over depth. Depth is what makes it feel good |
 | **Weapon upgrades / attachments** | A second economy to balance, for no gain in the core loop |
 | **Skill trees** | Progression belongs in the run, not in a menu |
@@ -762,11 +840,11 @@ Every item here sounds good. That is precisely why it is written down.
 | **Cutscenes / story** | An arena shooter with twenty waves does not need a plot |
 | **Gyro aim in v1** | A second aiming system to tune. Stretch, after drag-look is right |
 | **Ads / in-app purchases** | They pull the game toward session-padding and grinding, which §2 and §11 reject |
-| **Play Store release in v1** | Store policy, listing, and review are a project of their own. A sideloaded APK is the finish line |
+| **A Play Store release that blocks work** | Play Games sign-in is built in v2, but off until configured. The game must always run, and be finished, without it |
 | **Aim assist that aims for you** | Snap, lock-on, or tracking. Slowdown only — see §4 |
 | **iOS / browser / desktop builds** | One platform, done well. The same reasoning as one map |
 | **Difficulty slider at launch** | See stretch item 1. One honest difficulty first |
-| **Online leaderboards** | Backend, hosting, and cheating. Local scores answer the same need |
+| **Our own online backend** | Hosting and cheating. Anything online goes through Play Games, or not at all |
 | **Vehicles** | A second game inside the first |
 | **Slow-motion** | A camera change that costs feel to everyone else |
 | **Melee** | Removes the reason to aim, which is the entire game |
@@ -862,13 +940,18 @@ Undecided, in no particular order:
 
 ## 15. Terminology
 
-- **The plaza** — the arena, the single map
-- **A wave** — one round of spawns, waves 1 through 20. Ends when the last
+- **The plaza** — the v1 arena, now the menu backdrop and practice range
+- **A room** — a walled rectangle; enemies enter only through its far wall
+- **A gate** — one of the alcoves in a room's far wall that enemies come
+  through
+- **A level** — one to four rooms in a chain, numbered 1 to 99
+- **A wave** — one round of spawns inside a room. Ends when the last
   enemy in it is dead
 - **An interval** — the ten seconds between waves, and the ten seconds the
   health system needs to do its work
-- **The boss** — wave 20, to §7's floor
-- **A run** — one attempt, from wave 1 to death or victory
+- **The boss** — the last room of every tenth level and of level 99, to
+  §7's floor
+- **A run** — one attempt at a level, to death or the clear
 - **The combo** — the kill multiplier, at risk when you are hit
 - **The grace window** — the short period after a kill during which damage
   steps the combo down instead of clearing it (§8)

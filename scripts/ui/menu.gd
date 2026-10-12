@@ -1,11 +1,14 @@
 extends Node3D
 ## The title screen: the plaza at night behind a slowly orbiting camera, and
-## Play, Practice Range, Settings (and Quit on desktop).
+## Play (the level select), Practice Range, Settings (and Quit on desktop).
+## The Play Games name shows in the corner once signed in.
 
 var _camera: Camera3D
 var _angle := 0.0
 var _menu: VBoxContainer
 var _settings: SettingsPanel
+var _levels: LevelSelect
+var _gamer: Button
 
 
 func _ready() -> void:
@@ -47,7 +50,7 @@ func _ready() -> void:
 	title.add_theme_constant_override("outline_size", 4)
 	_menu.add_child(title)
 	var tagline := Label.new()
-	tagline.text = "a neon-lit death run, twenty waves deep"
+	tagline.text = "a neon-lit death run, ninety-nine levels deep"
 	tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tagline.add_theme_font_size_override("font_size", 22)
 	tagline.modulate = Color(1, 1, 1, 0.75)
@@ -56,7 +59,7 @@ func _ready() -> void:
 	gap.custom_minimum_size.y = 24
 	_menu.add_child(gap)
 
-	var play := _button("PLAY", func() -> void: _start(Game.Mode.RUN))
+	var play := _button("PLAY", _open_levels)
 	_button("PRACTICE RANGE", func() -> void: _start(Game.Mode.PRACTICE))
 	_button("SETTINGS", _open_settings)
 	if not OS.has_feature("mobile"):
@@ -81,8 +84,30 @@ func _ready() -> void:
 	_settings.visible = false
 	_settings.closed.connect(func() -> void:
 		_menu.visible = true
-		(_menu.get_child(3) as Button).grab_focus())
+		(_menu.get_child(5) as Button).grab_focus())
 	ui.add_child(_settings)
+
+	_levels = LevelSelect.new()
+	_levels.visible = false
+	_levels.closed.connect(func() -> void:
+		_menu.visible = true
+		(_menu.get_child(3) as Button).grab_focus())
+	_levels.chosen.connect(func(n: int) -> void:
+		Game.level = n
+		_start(Game.Mode.RUN))
+	ui.add_child(_levels)
+
+	# Play Games: the gamer name once signed in, a sign-in button before.
+	_gamer = Button.new()
+	_gamer.flat = true
+	_gamer.position = Vector2(16, 10)
+	_gamer.custom_minimum_size.y = 56
+	_gamer.add_theme_font_size_override("font_size", 22)
+	_gamer.modulate = Color(1, 1, 1, 0.7)
+	_gamer.pressed.connect(PlayGames.sign_in)
+	ui.add_child(_gamer)
+	_show_gamer()
+	PlayGames.signed_in_changed.connect(_show_gamer)
 
 
 func _process(delta: float) -> void:
@@ -105,6 +130,17 @@ func _button(text: String, action: Callable) -> Button:
 		action.call())
 	_menu.add_child(b)
 	return b
+
+
+func _open_levels() -> void:
+	_menu.visible = false
+	_levels.open()
+
+
+func _show_gamer() -> void:
+	_gamer.visible = PlayGames.available
+	_gamer.disabled = PlayGames.signed_in
+	_gamer.text = PlayGames.player_name if PlayGames.signed_in else "SIGN IN TO PLAY GAMES"
 
 
 func _open_settings() -> void:

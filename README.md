@@ -1,15 +1,19 @@
 # cracked
 
-A 3D wave-survival FPS for Android. A neon-lit death run, twenty waves deep.
+A 3D room-clearing FPS for Android. A neon-lit death run, ninety-nine levels deep.
 The design is in [plans.md](plans.md); read it before adding anything.
 
 ## Status
 
-v1.0.0, the §11 finish line. One plaza, five moves, three guns (rifle,
-shotgun, marksman), three enemy types plus the wave-20 boss, twenty waves,
-the combo, regen, the HUD with hit / weak-point / kill markers, audio,
-touch and gamepad controls, settings, a practice range, and a menu. Builds
-to a debug-signed APK. Next comes tuning by play, on a real phone.
+v2 in progress (see plans.md §11). 99 levels, each a chain of one to four
+rectangular rooms. Enemies only come through gates in a room's far wall.
+The entry door locks behind you and the exit opens on the clear. Every
+tenth level ends in a boss room. There's a level select, and progress is
+saved on the phone. The rest is from v1.0.0: five moves, three guns
+(rifle, shotgun, marksman), three enemy types plus the boss, the combo,
+regen, the HUD with hit / weak-point / kill markers, audio, touch and
+gamepad controls, settings, and the plaza as menu backdrop and practice
+range.
 
 ## Install on a phone
 
@@ -46,6 +50,17 @@ uninstall first).
 
 Open `project.godot` in Godot and press F5, or run `godot --path .`.
 
+## Tests
+
+```sh
+godot --headless --path . res://tests/check_levels.tscn     # all 99 levels obey the room rules
+godot --headless --path . res://tests/autoplay.tscn -- 1 10 99   # clear levels unattended
+godot --headless --path . res://tests/smoke_level.tscn --quit-after 1500 -- 45
+```
+
+Each exits non-zero on a failure. The autoplay restores your saved progress
+afterwards.
+
 ## Build the APK
 
 1. In Godot: **Editor → Manage Export Templates → Download and Install**.
@@ -59,20 +74,69 @@ Open `project.godot` in Godot and press F5, or run `godot --path .`.
 godot --headless --export-debug "Android" build/cracked-1.0.0.apk
 ```
 
+## Google Play Games
+
+Sign-in, the gamer name on the menu, and level progress kept in a cloud
+save, through
+[godot-play-game-services](https://github.com/godot-sdk-integrations/godot-play-game-services)
+v3.4.0 (MIT, in `addons/GodotPlayGameServices/`). It is **off** until the
+steps below are done. Before that, the plugin stays disabled, the export
+doesn't need a Gradle build, and the game runs exactly as without it.
+
+Only you can do these steps, because they need your Google accounts:
+
+1. **Play Console** (one-time $25 developer account): create the app with
+   package name `com.proobker.cracked`.
+2. **A release keystore**, kept out of git (`*.keystore` is ignored) and
+   backed up somewhere safe:
+   ```sh
+   keytool -genkeypair -v -keystore cracked-release.keystore -alias cracked -keyalg RSA -keysize 2048 -validity 10000
+   keytool -list -v -keystore cracked-release.keystore -alias cracked   # note the SHA-1
+   ```
+   For debug builds, get the SHA-1 of Godot's debug keystore too
+   (`%APPDATA%\Godot\keystores\debug.keystore`, alias `androiddebugkey`,
+   password `android`).
+3. **Play Console → Play Games Services → Setup**: create the Play Games
+   project, then add an **Android credential** (an OAuth client) for
+   `com.proobker.cracked` with each SHA-1 from step 2. Copy the project's
+   numeric **Project ID**. Under **Testers**, add your Google account while
+   the game is unpublished.
+4. **In Godot**:
+   - Project → Install Android Build Template.
+   - Project Settings → Plugins: enable **GodotPlayGameServices**. This adds
+     its autoload.
+   - Project → Export → Android: tick **Gradle Build → Use Gradle Build**,
+     paste the Project ID into **godot_play_game_services/game_id**, and set
+     the release keystore under Keystore → Release.
+5. Optional: create a leaderboard and achievements in the Play Console and
+   paste their IDs into the constants at the top of
+   `scripts/game/play_games.gd`. The leaderboard takes the sum of your best
+   score on every level. The achievements fire on the first clear of
+   levels 10, 25, 50 and 99.
+6. Build a release-signed APK (`--export-release "Android" build/cracked.apk`)
+   and install it. The menu shows your gamer name, or a SIGN IN button.
+
+Leave the game ID empty while the plugin is enabled and the Gradle export
+fails: the plugin's manifest entry needs the ID.
+
 ## Layout
 
 ```
 scenes/menu.tscn            title screen (main scene)
 scenes/main.tscn            a run or the practice range; scripts/game/main.gd builds it
 scripts/game/               main, tuning (every tunable + saved settings), audio,
-                            wave director (all 20 waves), score, pickups
+                            levels (the 99, generated), level run (rooms in order),
+                            wave director (one room's waves), progress, score, pickups
 scripts/input/              the single input layer: touch, gamepad, keyboard → intents
 scripts/player/             movement, health, aim assist, weapon slots
 scripts/weapons/            weapon base, rifle, shotgun, marksman
 scripts/enemies/            enemy base, rusher, shooter, heavy, boss, projectile
-scripts/world/              the plaza blockout and skyline
-scripts/ui/                 HUD, crosshair and markers, touch controls, menu, settings
+scripts/world/              rooms, the plaza, shared blockout builders and skyline
+scripts/ui/                 HUD, crosshair and markers, touch controls, menu, level select, settings
+tests/                      headless checks: every level's rules, and an autoplay that clears levels
 audio/                      CC0 sound and music, see CREDITS.md
+models/enemies/             CC0 robot models and textures, see CREDITS.md
+addons/                     the Play Games plugin (disabled until set up)
 android_icons/              adaptive launcher icon layers
 ```
 
