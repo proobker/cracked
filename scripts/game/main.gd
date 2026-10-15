@@ -100,10 +100,16 @@ func _ready() -> void:
 		Audio.play_music(&"combat")
 		_run.start()
 		Audio.set_intensity(_level_intensity())
-		_hud.banner("LEVEL %d" % level, 2.0)
+		var modifier: StringName = _run.level["modifier"]
+		if modifier == &"":
+			_hud.banner("LEVEL %d  ·  %s" % [level, _run.level["theme"]["name"]], 2.5)
+		else:
+			_hud.banner("LEVEL %d  ·  %s" % [level, String(Levels.MODIFIERS[modifier]).get_slice("  ·  ", 0)], 3.5)
 
 
 func _process(_delta: float) -> void:
+	if not _player.dead:
+		_hud.set_spread(_player.weapon.current_spread_deg(), _player.camera.fov)
 	if Input.is_action_just_pressed("pause") and not _over and not _settings.visible:
 		_set_paused(not get_tree().paused)
 

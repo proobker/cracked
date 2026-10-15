@@ -24,16 +24,21 @@ var length := 36.0
 var has_entry := true
 var has_exit := true
 
-var _floor_mat := Blockout.flat(Color(0.09, 0.09, 0.14))
-var _wall_mat := Blockout.flat(Color(0.06, 0.06, 0.1))
-var _cover_mat := Blockout.flat(Color(0.16, 0.16, 0.24))
+var theme: Dictionary
+var _floor_mat: StandardMaterial3D
+var _wall_mat: StandardMaterial3D
+var _cover_mat: StandardMaterial3D
 var _gate_xs: Array[float] = []
 var _entry_door: Node3D
 var _exit_door: Node3D
 
 
-func _init(room_spec: Dictionary, entry := true, exit := true) -> void:
+func _init(room_spec: Dictionary, entry := true, exit := true, level_theme: Dictionary = Levels.THEMES[0]) -> void:
 	spec = room_spec
+	theme = level_theme
+	_floor_mat = Blockout.flat(theme["floor"])
+	_wall_mat = Blockout.flat(theme["wall"])
+	_cover_mat = Blockout.flat(theme["cover"])
 	width = room_spec["width"]
 	length = room_spec["length"]
 	has_entry = entry
@@ -68,9 +73,9 @@ func _ready() -> void:
 	if has_exit:
 		_exit_door = _door(-half_l - 0.5)
 		_corridor(-half_l - 1.0)
-	for piece: Array in spec["cover"]:
-		Blockout.box(self, piece[0], piece[1], _cover_mat)
+	_build_cover()
 	_trim()
+	_decor()
 
 
 ## Where enemies appear: inside the far-wall alcoves, in world space.
@@ -188,7 +193,7 @@ func _corridor(z_start: float) -> void:
 	Blockout.box(self, Vector3(1.0, WALL_HEIGHT, CORRIDOR), Vector3(-hw - 0.5, y, mid), _wall_mat)
 	Blockout.box(self, Vector3(1.0, WALL_HEIGHT, CORRIDOR), Vector3(hw + 0.5, y, mid), _wall_mat)
 	Blockout.box(self, Vector3(DOOR_WIDTH + 2.0, 0.5, CORRIDOR), Vector3(0.0, DOOR_HEIGHT + 0.25, mid), _wall_mat)
-	Blockout.box(self, Vector3(0.1, 0.1, CORRIDOR), Vector3(0.0, 0.03, mid), Blockout.glow(Color(0.1, 0.9, 1.0), 3.0), false)
+	Blockout.box(self, Vector3(0.1, 0.1, CORRIDOR), Vector3(0.0, 0.03, mid), Blockout.glow(theme["trim"], 3.0), false)
 
 
 ## Fires `entered` once the player is fully inside, so the door closes
@@ -213,9 +218,58 @@ func _trigger() -> void:
 
 ## Neon along the wall tops, so the edge of the room always reads.
 func _trim() -> void:
-	var trim := Blockout.glow(Color(0.1, 0.9, 1.0), 3.0)
+	var trim := Blockout.glow(theme["trim"], 3.0)
 	var ty := WALL_HEIGHT + 0.05
 	Blockout.box(self, Vector3(1.05, 0.1, length), Vector3(-width / 2.0 - 0.5, ty, 0.0), trim, false)
 	Blockout.box(self, Vector3(1.05, 0.1, length), Vector3(width / 2.0 + 0.5, ty, 0.0), trim, false)
 	Blockout.box(self, Vector3(width + 2.0, 0.1, 1.05), Vector3(0.0, ty, length / 2.0 + 0.5), trim, false)
 	Blockout.box(self, Vector3(width + 2.0, 0.1, 1.05), Vector3(0.0, ty, -length / 2.0 - 0.5), trim, false)
+
+
+## Cover from the layout. Flat-topped pieces get a line of neon along the
+## top edge so their shape reads in the dark; ramps get one down the middle.
+func _build_cover() -> void:
+	var edge := Blockout.glow(theme["accent"], 2.0)
+	for piece: Array in spec["cover"]:
+		var size: Vector3 = piece[0]
+		var pos: Vector3 = piece[1]
+		var rot: Vector3 = piece[2] if piece.size() > 2 else Vector3.ZERO
+		var body := Blockout.box(self, size, pos, _cover_mat, true, rot)
+		if rot == Vector3.ZERO:
+			Blockout.box(body, Vector3(size.x + 0.04, 0.06, 0.08), Vector3(0.0, size.y / 2.0, size.z / 2.0), edge, false)
+			Blockout.box(body, Vector3(size.x + 0.04, 0.06, 0.08), Vector3(0.0, size.y / 2.0, -size.z / 2.0), edge, false)
+		else:
+			Blockout.box(body, Vector3(0.12, 0.04, size.z), Vector3(0.0, size.y / 2.0, 0.0), edge, false)
+
+
+## What makes one room look unlike the next: coloured light pooled over the
+## floor, neon strips down the side walls, and a sign over the far wall to
+## navigate by (§3's landmarks).
+func _decor() -> void:
+	var trim: Color = theme["trim"]
+	var accent: Color = theme["accent"]
+	var half_l := length / 2.0
+	# Two pools of light, one near and one far, in the two theme colours.
+	for i in 2:
+		var light := OmniLight3D.new()
+		light.light_color = accent if i == 0 else trim
+		light.light_energy = 1.6
+		light.omni_range = maxf(width, 14.0)
+		light.position = Vector3(0.0, WALL_HEIGHT + 1.5, half_l * (0.45 if i == 0 else -0.45))
+		add_child(light)
+	# Vertical strips on the inside of the side walls.
+	var strip_a := Blockout.glow(trim, 2.5)
+	var strip_b := Blockout.glow(accent, 2.5)
+	var step := 7.0 if spec.get("layout", &"") != &"pillars" else 5.0
+	var z := -half_l + step / 2.0
+	var i := 0
+	while z < half_l - 1.0:
+		var mat := strip_a if i % 2 == 0 else strip_b
+		for sx: float in [-1.0, 1.0]:
+			Blockout.box(self, Vector3(0.06, WALL_HEIGHT * 0.8, 0.25), Vector3(sx * (width / 2.0 - 0.02), WALL_HEIGHT * 0.45, z), mat, false)
+		z += step
+		i += 1
+	# The sign: a lit billboard over the far wall, its own width per room.
+	var sign_w := clampf(width * 0.45, 7.0, 11.0)
+	Blockout.box(self, Vector3(sign_w, 1.8, 0.3), Vector3(0.0, WALL_HEIGHT + 1.6, -half_l - 0.6), Blockout.glow(accent, 2.2), false)
+	Blockout.box(self, Vector3(sign_w * 0.7, 0.25, 0.32), Vector3(0.0, WALL_HEIGHT + 1.6, -half_l - 0.6), Blockout.glow(trim, 4.0), false)

@@ -118,6 +118,7 @@ func _show_info(n: int) -> void:
 	var text := "LEVEL %d   ·   %d room%s" % [n, rooms, "" if rooms == 1 else "s"]
 	if Levels.is_boss_level(n):
 		text += "   ·   BOSS"
+	text += "   ·   " + Levels.describe(n)
 	if not Progress.is_unlocked(n):
 		text += "   ·   locked"
 	elif Progress.best_for(n) > 0:

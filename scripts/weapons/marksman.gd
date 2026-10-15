@@ -23,7 +23,15 @@ func _init() -> void:
 	spread_deg = 3.0
 	spread_crouched_deg = 2.0
 	spread_scoped_deg = 0.0
+	# Stop moving, breathe, aim (§5): moving costs accuracy even scoped.
+	move_spread_deg = 1.5
+	air_spread_deg = 4.0
 	kick_deg = 3.0
+	recoil_yaw_deg = 0.8
+	recoil_recover = 6.0
+	shake = 0.35
+	tracer_width = 0.05
+	tracer_life = 0.22
 	score_mult = 1.25
 	can_scope = true
 	scoped_fov = 30.0
@@ -37,4 +45,5 @@ func _build_model() -> Node3D:
 	_part(root, Vector3(0.07, 0.1, 0.7), Vector3.ZERO, body) # stock and receiver
 	_part(root, Vector3(0.03, 0.03, 0.5), Vector3(0.0, 0.01, -0.58), body) # long barrel
 	_part(root, Vector3(0.05, 0.05, 0.28), Vector3(0.0, 0.09, -0.05), _trim_mat()) # scope
+	muzzle = Vector3(0.0, 0.01, -0.84)
 	return root

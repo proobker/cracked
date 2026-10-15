@@ -22,20 +22,21 @@ func _init(number: int) -> void:
 
 
 func _ready() -> void:
-	Blockout.environment(self)
+	var theme: Dictionary = level["theme"]
+	Blockout.environment(self, theme, level["modifier"] == &"blackout")
 	var specs: Array = level["rooms"]
 	var z := 0.0
 	for i in specs.size():
 		var spec: Dictionary = specs[i]
 		if i > 0:
 			z -= (specs[i - 1]["length"] as float) / 2.0 + Room.CORRIDOR + 2.0 + (spec["length"] as float) / 2.0
-		var room := Room.new(spec, i > 0, i < specs.size() - 1)
+		var room := Room.new(spec, i > 0, i < specs.size() - 1, theme)
 		room.position.z = z
 		add_child(room)
 		rooms.append(room)
 		if i > 0:
 			room.entered.connect(_start_room.bind(i))
-	Blockout.skyline(self, Vector3(0.0, 0.0, z / 2.0), -z / 2.0)
+	Blockout.skyline(self, Vector3(0.0, 0.0, z / 2.0), -z / 2.0, theme, 2077 + number())
 	director.all_waves_cleared.connect(_on_room_cleared)
 
 
@@ -64,6 +65,7 @@ func _start_room(i: int) -> void:
 	director.bounds = room.bounds()
 	director.min_spawn_distance = Tuning.room_spawn_distance
 	director.boss_scale = Levels.boss_scale(number())
+	director.speed_scale = Levels.speed_scale(level["modifier"])
 	director.start()
 	room_started.emit(i, rooms.size())
 

@@ -2,6 +2,8 @@ class_name Crosshair
 extends Control
 ## Crosshair plus the three markers (§9): hit, weak point, kill. Each one
 ## looks different, because hitting and killing must never look the same.
+## The open crosshair's gap is the weapon's current spread, so bloom and the
+## cost of moving are always visible.
 
 const MARKERS := {
 	"hit": {"color": Color(1, 1, 1), "size": 9.0, "time": 0.12},
@@ -11,6 +13,8 @@ const MARKERS := {
 
 ## Scoped: a dark scope ring and a fine crosshair instead of the open one.
 var scoped := false
+## Half the spread cone's width on screen, in pixels.
+var spread_px := 4.0
 var _marker := ""
 var _marker_left := 0.0
 
@@ -44,10 +48,12 @@ func _draw() -> void:
 		draw_line(c + Vector2(0, -r), c + Vector2(0, r), Color(0, 0, 0, 0.7), 1.5)
 		draw_circle(c, 2.0, Color(1.0, 0.2, 0.4))
 	else:
-		draw_line(c + Vector2(-10, 0), c + Vector2(-4, 0), white, 2.0)
-		draw_line(c + Vector2(4, 0), c + Vector2(10, 0), white, 2.0)
-		draw_line(c + Vector2(0, -10), c + Vector2(0, -4), white, 2.0)
-		draw_line(c + Vector2(0, 4), c + Vector2(0, 10), white, 2.0)
+		var g := clampf(spread_px, 4.0, 90.0)
+		draw_line(c + Vector2(-g - 7, 0), c + Vector2(-g, 0), white, 2.0)
+		draw_line(c + Vector2(g, 0), c + Vector2(g + 7, 0), white, 2.0)
+		draw_line(c + Vector2(0, -g - 7), c + Vector2(0, -g), white, 2.0)
+		draw_line(c + Vector2(0, g), c + Vector2(0, g + 7), white, 2.0)
+		draw_circle(c, 1.5, white)
 	if _marker_left > 0.0:
 		var spec: Dictionary = MARKERS[_marker]
 		var col: Color = spec["color"]

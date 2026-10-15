@@ -223,9 +223,28 @@ backdrop and the practice range.)*
   where the next thing will come from. Nothing spawns at your back. This
   is the room's one rule, and it is checked in tests.
 - **Cover in the middle band only**, from the same vocabulary as the
-  plaza: low walls to crouch behind, tall blocks to break line of sight.
-  It is kept clear of the side walls and of each other, so a walker never
-  gets trapped (§6).
+  plaza: low walls to crouch behind, tall blocks to break line of sight,
+  decks and ramps. Free-standing pieces leave 3 m to each other and to the
+  side walls; pieces that join (a deck and its ramps, a catwalk against
+  the wall) leave no gap at all. So a walker never gets trapped (§6). This
+  is checked in tests.
+- **Each room has a layout and a shape.** Layouts: *scatter* (blocks
+  dropped at random), *pillars* (a staggered hall of columns), *lanes*
+  (long low walls to slide down), *deck* (a raised middle with full-width
+  ramps), *bunkers* (block-and-wall clusters), *spine* (a broken wall down
+  the middle that makes two lanes), *catwalks* (raised walkways along both
+  side walls). A level never uses the same layout twice in a row. Shapes:
+  the long narrow *hall*, the wide short *arena*, and the standard room.
+  Boss rooms are an open arena ringed by four pillars.
+- **Each level has a theme**: one of seven palettes for the neon, floor,
+  fog, sky and lights, never the same as the level before. Each room has
+  pools of coloured light, neon strips on its walls, and a sign over the
+  far wall to navigate by.
+- **About two levels in five carry a modifier**, from level 6, never on a
+  boss level: *swarm* (more rushers, higher cap), *crossfire* (shooter
+  heavy, from 12), *juggernaut* (two more heavies, from 32), *blackout*
+  (thick fog, dim light), *overdrive* (enemies 20% faster). Modifiers
+  reweight a wave within its band; they never bring a type in early.
 - **The entry door locks behind you; the exit door opens on the clear.**
   An opened door glows cyan. A locked one glows red.
 - **Gates are open to the top** so the boss fits through.
@@ -438,6 +457,27 @@ lost, but the loss is always traceable to a decision the player made.
   rather than a hold, because a held button costs a thumb that touch does
   not have to spare. Look sensitivity drops while scoped.
 
+*Decided in the build (v2), the shared shooter feel stack:*
+
+- **First-shot accuracy, then bloom.** The first shot goes where you point.
+  Held fire widens the cone a little each shot, and it settles when you
+  stop. Moving and jumping widen it, and crouching tightens it. The
+  marksman stays exact only when scoped and standing still.
+- **The crosshair shows the spread.** Its gap is the cone, so bloom is
+  never a hidden dice roll.
+- **Recoil moves the aim, and the aim recovers.** Kick goes into the real
+  view, so the bullet lands where the crosshair is. Once the trigger
+  rests, the view settles back toward where the burst began. Pulling down
+  against it counts toward that, so recovery never overshoots.
+- **Every shot is seen**: a muzzle flash that lights the room, a tracer,
+  sparks where it lands (in the enemy's colour on a hit, bigger on a kill),
+  and camera shake that moves the camera without turning it.
+- **The gun is alive.** It sways against your look, bobs as you run,
+  drops for a sprint, dips through a reload, and rises on a swap.
+- **The gun never clips into walls.** It is drawn with its depth squeezed
+  in front of the world (`shaders/viewmodel.gdshader`, written for reverse
+  Z), so it stays visible and the right size, even against a wall.
+
 ---
 
 ## 6. Enemies
@@ -473,8 +513,29 @@ landed. Without it, "aim for the weak point" is just text on a page and
 
 ### The deliberate omission: no cover-seeking AI
 
-Enemies do not strafe, flank through geometry, or take cover. They walk
-toward you, shoot from where they stand, and get shot.
+Enemies do not flank through geometry or take cover. They come toward
+you, shoot from where they are, and get shot.
+
+*Revised in the build (v2): they no longer walk in straight lines.* Motion
+is steering, not pathfinding, and it costs nothing a room needs to know
+about:
+
+- **Wander.** The direction an enemy wants is bent by an angle that drifts
+  smoothly toward a new random target every second or so. A per-frame
+  jitter would read as twitching. The bend fades out up close, so a rusher
+  still connects.
+- **Separation.** Enemies push apart from each other, so a wave spreads
+  across the room instead of walking in single file.
+- **Jukes.** A short sidestep across your line of fire. It is likeliest
+  while your crosshair is on the enemy, so it reads as a dodge. It has a
+  cooldown, it never happens during a stagger, and a shooter never jukes
+  out of its own windup. It moves the body only: aim is still at where you
+  are (§4).
+- **Rhythm per type.** Rushers weave and surge in bursts of speed.
+  Shooters strafe around you at a range of their own, switch sides or
+  hover for a beat, and plant still while they charge. Heavies only sway.
+  The boss sidesteps now and then. Every enemy also rolls its own speed,
+  ±10%.
 
 This is a real cost to ambition, taken on purpose. Cover-seeking AI needs
 pathfinding and line-of-sight logic, which is the most expensive system in a

@@ -5,6 +5,12 @@ extends CharacterBody3D
 ## path, and takes no cover. Subclasses set numbers, pick a model, and
 ## decide what to do each tick in _act(). The collision shape is fitted to
 ## the model, so what you see is what you can hit.
+##
+## Motion is steering, not pathfinding (§6): the direction _act() asks for
+## is bent by a slow wander, pushed apart from other enemies, and now and
+## then broken by a juke — a short sidestep, most often when the player's
+## crosshair is on it. Every enemy rolls its own speed and rhythm, so no two
+## walk alike.
 
 signal died(enemy: Enemy)
 
@@ -33,6 +39,24 @@ var active := false
 var last_hit_by := &"rifle"
 ## Stationary practice dummies: never move or attack.
 var dummy := false
+## Set before entering the tree: the level's speed multiplier.
+var speed_scale := 1.0
+
+# Steering, set per type in _configure().
+## How far the wander may bend the path, in radians, when far from the player.
+var wander_angle := 0.35
+## Seconds between new wander targets (random in this range).
+var wander_period := Vector2(0.6, 1.6)
+## Sidestep speed and length; 0 speed means this type never jukes.
+var juke_speed := 0.0
+var juke_time := 0.3
+## Seconds between jukes (random in this range).
+var juke_cooldown := Vector2(2.5, 5.0)
+## Chance per second of a juke while the player aims at it, and otherwise.
+var juke_aimed_rate := 1.2
+var juke_idle_rate := 0.08
+## How hard it keeps its distance from other enemies.
+var separation := 1.0
 
 var _dead := false
 var _telegraph_left := 0.0
@@ -41,6 +65,13 @@ var _detour_dir := Vector3.ZERO
 var _detour_left := 0.0
 var _stagger_left := 0.0
 var _flash_left := 0.0
+var _rng := RandomNumberGenerator.new()
+var _wander := 0.0
+var _wander_target := 0.0
+var _wander_left := 0.0
+var _juke_vel := Vector3.ZERO
+var _juke_left := 0.0
+var _juke_cd := 0.0
 var _body: Node3D
 var _model: EnemyModel
 var _glow_mats: Array[StandardMaterial3D] = []
@@ -50,6 +81,11 @@ var _weak_shape_idx := -1
 
 func _ready() -> void:
 	_configure()
+	_rng.randomize()
+	# No two alike: each one walks a little faster or slower than its type.
+	speed *= speed_scale * _rng.randf_range(0.9, 1.1)
+	_juke_cd = _rng.randf_range(juke_cooldown.x * 0.5, juke_cooldown.y)
+	_wander_target = _rng.randf_range(-wander_angle, wander_angle)
 	health = max_health
 	_telegraph_left = Tuning.spawn_telegraph * telegraph_scale
 	collision_layer = 0 # not hittable until the telegraph finishes (§2)
@@ -119,12 +155,15 @@ func _physics_process(delta: float) -> void:
 	to.y = 0.0
 	if _stagger_left > 0.0:
 		_stagger_left -= delta
+		_juke_vel = Vector3.ZERO
+		_juke_left = 0.0
 		velocity.x = 0.0
 		velocity.z = 0.0
 		move_and_slide()
 		return
 
-	var move_dir := _act(delta, to)
+	var move_dir := _steer(delta, _act(delta, to), to)
+	_tick_juke(delta, to)
 	if _detour_left > 0.0:
 		_detour_left -= delta
 		_heading = _detour_dir
@@ -133,13 +172,14 @@ func _physics_process(delta: float) -> void:
 		var step := clampf(angle, -turn_rate * delta, turn_rate * delta)
 		_heading = _heading.rotated(Vector3.UP, step).normalized()
 	var moving := move_dir.length() > 0.05 or _detour_left > 0.0
-	var spd := speed if moving else 0.0
-	velocity.x = _heading.x * spd
-	velocity.z = _heading.z * spd
+	var spd := speed * _speed_factor() if moving else 0.0
+	velocity.x = _heading.x * spd + _juke_vel.x
+	velocity.z = _heading.z * spd + _juke_vel.z
 	move_and_slide()
 	_face(to)
 	if _model:
-		_model.locomote(moving, spd / maxf(speed, 0.1))
+		var flat := Vector2(velocity.x, velocity.z).length()
+		_model.locomote(flat > 0.3, flat / maxf(speed, 0.1))
 
 	# Not pathfinding (§6): an enemy pinned against a wall walks along it for
 	# a moment, toward the player's side, then goes back to walking straight.
@@ -176,6 +216,80 @@ func take_hit(amount: float, shape_idx: int, source: StringName, stagger: float)
 ## Override: per-tick behaviour. Return the direction to walk (zero to hold).
 func _act(_delta: float, to: Vector3) -> Vector3:
 	return to
+
+
+## Override: multiplies speed this tick (a rusher's surge, say).
+func _speed_factor() -> float:
+	return 1.0
+
+
+## Bends the wanted direction: a wander that drifts smoothly toward a new
+## random angle every second or so (not a per-frame jitter, which reads as
+## twitching), fading out up close so a rusher still connects; plus a push
+## away from any enemy within a few metres, so a wave spreads out instead
+## of walking in single file.
+func _steer(delta: float, wanted: Vector3, to: Vector3) -> Vector3:
+	if wanted.length() < 0.05:
+		return wanted
+	_wander_left -= delta
+	if _wander_left <= 0.0:
+		_wander_left = _rng.randf_range(wander_period.x, wander_period.y)
+		_wander_target = _rng.randf_range(-wander_angle, wander_angle)
+	_wander = move_toward(_wander, _wander_target, 1.5 * delta)
+	var near := clampf((to.length() - 3.0) / 8.0, 0.0, 1.0)
+	var dir := wanted.normalized().rotated(Vector3.UP, _wander * near)
+	if separation > 0.0:
+		var push := Vector3.ZERO
+		for node in get_tree().get_nodes_in_group("enemy"):
+			var other := node as Enemy
+			if other == self:
+				continue
+			var away := global_position - other.global_position
+			away.y = 0.0
+			var reach := radius + other.radius + 1.5
+			var d := away.length()
+			if d > 0.01 and d < reach:
+				push += away / d * (1.0 - d / reach)
+		dir += push * separation
+	return dir.normalized() if dir.length() > 0.05 else wanted
+
+
+## A juke is a sidestep across the player's line of fire, on top of the
+## walk. It is likelier while the crosshair is on this enemy, so it reads
+## as a dodge, but it has a cooldown, it is never on a stagger, and it only
+## moves the body: aim is still at where the player is (§4).
+func _tick_juke(delta: float, to: Vector3) -> void:
+	if _juke_left > 0.0:
+		_juke_left -= delta
+		if _juke_left <= 0.0:
+			_juke_vel = Vector3.ZERO
+		return
+	_juke_cd -= delta
+	if juke_speed <= 0.0 or _juke_cd > 0.0 or to.length() < 2.5:
+		return
+	var rate := juke_aimed_rate if _player_aiming_at_me() else juke_idle_rate
+	if _rng.randf() < rate * delta:
+		juke(to)
+
+
+func juke(to: Vector3) -> void:
+	var side := to.normalized().cross(Vector3.UP)
+	if _rng.randf() < 0.5:
+		side = -side
+	# Prefer the side that is not into a wall.
+	if is_on_wall() and side.dot(get_wall_normal()) < 0.0:
+		side = -side
+	_juke_vel = side * juke_speed
+	_juke_left = juke_time
+	_juke_cd = _rng.randf_range(juke_cooldown.x, juke_cooldown.y)
+
+
+func _player_aiming_at_me() -> bool:
+	if target == null or target.camera == null:
+		return false
+	var cam := target.camera
+	var to_me := global_position + Vector3(0.0, height * 0.5, 0.0) - cam.global_position
+	return rad_to_deg((-cam.global_basis.z).angle_to(to_me)) < 8.0
 
 
 ## Override: set kind, numbers, and color.

@@ -155,6 +155,15 @@ func flash_hurt() -> void:
 	_hurt.color.a = 0.28
 
 
+## Opens the crosshair to a spread cone (half-angle, degrees) at this
+## vertical field of view.
+func set_spread(spread_deg: float, fov_deg: float) -> void:
+	var px := tan(deg_to_rad(spread_deg)) / tan(deg_to_rad(fov_deg / 2.0)) * size.y / 2.0
+	if absf(px - _crosshair.spread_px) > 0.25:
+		_crosshair.spread_px = px
+		_crosshair.queue_redraw()
+
+
 func show_marker(kind: String) -> void:
 	_crosshair.show_marker(kind)
 

@@ -1,13 +1,20 @@
 class_name Rusher
 extends Enemy
-## Pressure (§6). Walks straight at the player, turning slowly so it
-## overshoots a good slide, and hits on contact. Teaches: do not stand still.
+## Pressure (§6). Runs at the player on a weaving line, turning slowly so it
+## overshoots a good slide, and hits on contact. Every few seconds it surges
+## for a burst of speed, and it jukes sideways when it is being aimed at.
+## Teaches: do not stand still, and track what you shoot.
 
 const MELEE_RANGE := 1.7
 const MELEE_DAMAGE := 20.0
 const MELEE_COOLDOWN := 1.0
 
+const SURGE_MULT := 1.45
+const SURGE_TIME := 0.7
+
 var _melee_left := 0.0
+var _surge_left := 0.0
+var _surge_cd := 0.0
 
 
 func _configure() -> void:
@@ -23,6 +30,14 @@ func _configure() -> void:
 	model_scale = 0.8
 	radius = 0.6
 	height = 1.3
+	wander_angle = 0.6
+	wander_period = Vector2(0.5, 1.3)
+	juke_speed = 8.5
+	juke_time = 0.28
+	juke_cooldown = Vector2(2.0, 4.5)
+	juke_aimed_rate = 1.4
+	juke_idle_rate = 0.15
+	_surge_cd = randf_range(1.5, 4.0)
 
 
 func _build_body(parent: Node3D) -> void:
@@ -32,6 +47,11 @@ func _build_body(parent: Node3D) -> void:
 
 
 func _act(delta: float, to: Vector3) -> Vector3:
+	_surge_left -= delta
+	_surge_cd -= delta
+	if _surge_cd <= 0.0 and to.length() > 5.0:
+		_surge_left = SURGE_TIME
+		_surge_cd = _rng.randf_range(3.0, 6.0)
 	_melee_left -= delta
 	if to.length() < MELEE_RANGE and _melee_left <= 0.0 and not target.dead:
 		target.take_damage(MELEE_DAMAGE, display_name)
@@ -40,3 +60,7 @@ func _act(delta: float, to: Vector3) -> Vector3:
 			_model.action(&"Attack")
 		_melee_left = MELEE_COOLDOWN
 	return to
+
+
+func _speed_factor() -> float:
+	return SURGE_MULT if _surge_left > 0.0 else 1.0

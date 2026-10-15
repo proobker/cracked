@@ -8,13 +8,17 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
 config/name="cracked"
 config/description="A neon-lit death run, ninety-nine levels deep."
 config/version="1.0.0"
 run/main_scene="res://scenes/menu.tscn"
-config/features=PackedStringArray("4.4", "Mobile")
+config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.png"
 
 [autoload]
@@ -24,6 +28,7 @@ PlayerInput="*res://scripts/input/player_input.gd"
 Audio="*res://scripts/game/audio.gd"
 Progress="*res://scripts/game/progress.gd"
 PlayGames="*res://scripts/game/play_games.gd"
+GodotPlayGameServices="*uid://dtk41nt46cbsc"
 
 [display]
 
@@ -32,6 +37,10 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/GodotPlayGameServices/plugin.cfg")
 
 [layer_names]
 

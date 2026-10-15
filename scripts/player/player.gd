@@ -32,6 +32,12 @@ var _dash_left := 0.0
 var _dash_cooldown_left := 0.0
 var _iframes_left := 0.0
 var _since_damage := 0.0
+## Recoil not yet recovered, in degrees: x pitch up, y yaw right.
+var _recoil_debt := Vector2.ZERO
+var _last_look := Vector2.ZERO
+## Camera shake, 0–1; it is squared on use so small amounts stay subtle.
+var _trauma := 0.0
+var _shake_t := 0.0
 
 
 func _ready() -> void:
@@ -59,6 +65,7 @@ func _ready() -> void:
 
 	for w: Weapon in [Rifle.new(), Shotgun.new(), Marksman.new()]:
 		w.camera = camera
+		w.fx_parent = get_parent() as Node3D
 		camera.add_child(w)
 		w.ammo_changed.connect(_on_weapon_ammo)
 		w.fired.connect(func(result: String) -> void: shot_result.emit(result))
@@ -144,11 +151,13 @@ func _physics_process(delta: float) -> void:
 	head.position.y = move_toward(head.position.y, eye, 6.0 * delta)
 
 	_weapon_input()
+	var flat_speed := Vector2(velocity.x, velocity.z).length()
+	weapon.set_motion(_last_look, flat_speed / Tuning.sprint_speed, not is_on_floor(), sprinting)
 	var kick := weapon.tick(delta, Input.is_action_pressed("fire"), Input.is_action_just_pressed("reload"), crouched)
-	if kick > 0.0:
-		head.rotation.x = clampf(head.rotation.x + deg_to_rad(kick), -1.5, 1.5)
+	_recoil(kick, delta)
 	var fov: float = weapon.scoped_fov if weapon.scoped else Tuning.fov
 	camera.fov = move_toward(camera.fov, fov, 300.0 * delta)
+	_shake(delta)
 
 
 func take_damage(amount: float, source: String) -> void:
@@ -156,6 +165,7 @@ func take_damage(amount: float, source: String) -> void:
 		return
 	health = maxf(0.0, health - amount)
 	_since_damage = 0.0
+	add_trauma(0.45)
 	Audio.play(&"hurt")
 	damaged.emit()
 	health_changed.emit(health, Tuning.max_health)
@@ -215,6 +225,42 @@ func _on_weapon_ammo(w: Weapon) -> void:
 		weapon_changed.emit(w)
 
 
+## Shakes the camera by moving it, never turning it, so aim is untouched.
+func add_trauma(amount: float) -> void:
+	_trauma = minf(1.0, _trauma + amount)
+
+
+## Recoil moves the real aim, so the shot goes where the crosshair is. Once
+## the gun rests, the aim settles back toward where the burst began; any
+## pull-down the player already made counts toward that.
+func _recoil(kick: Vector2, delta: float) -> void:
+	if kick != Vector2.ZERO:
+		head.rotation.x = clampf(head.rotation.x + deg_to_rad(kick.x), -1.5, 1.5)
+		rotate_y(deg_to_rad(-kick.y))
+		_recoil_debt += kick
+		add_trauma(weapon.shake * (0.3 if weapon.scoped else 1.0))
+		return
+	if not weapon.recovering():
+		return
+	var step := weapon.recoil_recover * delta
+	var pitch := minf(_recoil_debt.x, step)
+	if pitch > 0.0:
+		head.rotation.x = clampf(head.rotation.x - deg_to_rad(pitch), -1.5, 1.5)
+		_recoil_debt.x -= pitch
+	var yaw := clampf(_recoil_debt.y, -step * 0.5, step * 0.5)
+	if yaw != 0.0:
+		rotate_y(deg_to_rad(yaw))
+		_recoil_debt.y -= yaw
+
+
+func _shake(delta: float) -> void:
+	_trauma = maxf(0.0, _trauma - 2.2 * delta)
+	_shake_t += delta
+	var amount := _trauma * _trauma * 0.07
+	camera.h_offset = amount * sin(_shake_t * 53.0)
+	camera.v_offset = amount * sin(_shake_t * 47.0 + 1.3)
+
+
 func is_dashing() -> bool:
 	return _dash_left > 0.0
 
@@ -229,6 +275,10 @@ func _look(delta: float) -> void:
 		look *= 1.0 - Tuning.aim_assist_strength
 	if weapon.scoped:
 		look *= Tuning.scoped_look_scale
+	_last_look = look
+	# Pulling down against recoil pays it off, so recovery never overshoots.
+	if look.y > 0.0 and _recoil_debt.x > 0.0:
+		_recoil_debt.x = maxf(0.0, _recoil_debt.x - look.y)
 	rotate_y(deg_to_rad(-look.x))
 	head.rotation.x = clampf(head.rotation.x - deg_to_rad(look.y), -1.5, 1.5)
 

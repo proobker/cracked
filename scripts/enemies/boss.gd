@@ -30,6 +30,12 @@ func _configure() -> void:
 	telegraph_scale = 2.5
 	melee_range = 3.4
 	melee_damage = 45.0
+	# A heavy sidestep now and then, so it is not a stationary target.
+	juke_speed = 5.0
+	juke_time = 0.5
+	juke_cooldown = Vector2(4.0, 7.0)
+	juke_aimed_rate = 0.3
+	juke_idle_rate = 0.15
 
 
 func _act(delta: float, to: Vector3) -> Vector3:

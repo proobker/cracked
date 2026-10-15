@@ -22,7 +22,15 @@ func _init() -> void:
 	reload_time = 2.4
 	spread_deg = 5.0
 	spread_crouched_deg = 4.0
-	kick_deg = 2.5
+	move_spread_deg = 0.5
+	air_spread_deg = 1.0
+	kick_deg = 2.4
+	recoil_yaw_deg = 0.6
+	recoil_recover = 9.0
+	shake = 0.3
+	tracer_width = 0.018
+	tracer_life = 0.07
+	tracer_pellets = 4
 	stagger = 0.35
 
 
@@ -34,4 +42,5 @@ func _build_model() -> Node3D:
 	_part(root, Vector3(0.12, 0.14, 0.45), Vector3.ZERO, body) # receiver
 	_part(root, Vector3(0.1, 0.1, 0.32), Vector3(0.0, 0.03, -0.36), body) # barrel
 	_part(root, Vector3(0.13, 0.08, 0.16), Vector3(0.0, -0.06, -0.3), _trim_mat()) # pump
+	muzzle = Vector3(0.0, 0.03, -0.53)
 	return root

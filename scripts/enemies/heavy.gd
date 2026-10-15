@@ -27,6 +27,10 @@ func _configure() -> void:
 	model_scale = 1.0
 	radius = 1.1
 	height = 2.5
+	# Lumbers: a slight sway, no dodging, and a wide berth from the others.
+	wander_angle = 0.2
+	wander_period = Vector2(1.5, 3.0)
+	separation = 1.5
 
 
 func _build_body(parent: Node3D) -> void:

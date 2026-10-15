@@ -24,6 +24,8 @@ var min_spawn_distance := Tuning.min_spawn_distance
 var first_delay := Tuning.first_wave_delay
 ## Boss health multiplier, from the level.
 var boss_scale := 1.0
+## Enemy speed multiplier, from the level's modifier.
+var speed_scale := 1.0
 
 var wave := 0
 var state := State.IDLE
@@ -112,6 +114,7 @@ func _spawn_one() -> bool:
 	if enemy is Boss:
 		(enemy as Boss).health_scale = boss_scale
 	enemy.target = player
+	enemy.speed_scale = speed_scale
 	enemy.position = candidates.pick_random()
 	enemy.died.connect(_on_enemy_died)
 	enemy_parent.add_child(enemy)

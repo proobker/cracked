@@ -6,7 +6,11 @@ The design is in [plans.md](plans.md); read it before adding anything.
 ## Status
 
 v2 in progress (see plans.md §11). 99 levels, each a chain of one to four
-rectangular rooms. Enemies only come through gates in a room's far wall.
+rectangular rooms, each level in its own colour theme, each room in one of
+seven cover layouts, and some levels carrying a modifier (swarm,
+crossfire, juggernaut, blackout, overdrive). Enemies weave, strafe and
+juke. The guns have bloom, recoil with recovery, flash, tracers, impacts,
+and a viewmodel that never clips into walls. Enemies only come through gates in a room's far wall.
 The entry door locks behind you and the exit opens on the clear. Every
 tenth level ends in a boss room. There's a level select, and progress is
 saved on the phone. The rest is from v1.0.0: five moves, three guns
@@ -79,11 +83,14 @@ godot --headless --export-debug "Android" build/cracked-1.0.0.apk
 Sign-in, the gamer name on the menu, and level progress kept in a cloud
 save, through
 [godot-play-game-services](https://github.com/godot-sdk-integrations/godot-play-game-services)
-v3.4.0 (MIT, in `addons/GodotPlayGameServices/`). It is **off** until the
-steps below are done. Before that, the plugin stays disabled, the export
-doesn't need a Gradle build, and the game runs exactly as without it.
+v3.4.0 (MIT, in `addons/GodotPlayGameServices/`). **The project side is on**:
+the plugin is enabled with its autoload, the Android build template is
+installed in `android/`, and the Android export uses a Gradle build. On
+desktop, and on a phone until you sign in, the game runs offline as before.
 
-Only you can do these steps, because they need your Google accounts:
+What's left needs your Google accounts. **Until the Project ID is pasted
+in (step 4), the Android export fails**, because the plugin's manifest
+entry needs it.
 
 1. **Play Console** (one-time $25 developer account): create the app with
    package name `com.proobker.cracked`.
@@ -101,13 +108,11 @@ Only you can do these steps, because they need your Google accounts:
    `com.proobker.cracked` with each SHA-1 from step 2. Copy the project's
    numeric **Project ID**. Under **Testers**, add your Google account while
    the game is unpublished.
-4. **In Godot**:
-   - Project → Install Android Build Template.
-   - Project Settings → Plugins: enable **GodotPlayGameServices**. This adds
-     its autoload.
-   - Project → Export → Android: tick **Gradle Build → Use Gradle Build**,
-     paste the Project ID into **godot_play_game_services/game_id**, and set
-     the release keystore under Keystore → Release.
+4. **In Godot**: Project → Export → Android. Paste the Project ID into
+   **godot_play_game_services/game_id**, and set the release keystore,
+   alias and passwords under **Keystore → Release**. Do not commit
+   passwords: Godot keeps them in `.godot/export_credentials.cfg`, which is
+   git-ignored.
 5. Optional: create a leaderboard and achievements in the Play Console and
    paste their IDs into the constants at the top of
    `scripts/game/play_games.gd`. The leaderboard takes the sum of your best
@@ -116,8 +121,9 @@ Only you can do these steps, because they need your Google accounts:
 6. Build a release-signed APK (`--export-release "Android" build/cracked.apk`)
    and install it. The menu shows your gamer name, or a SIGN IN button.
 
-Leave the game ID empty while the plugin is enabled and the Gradle export
-fails: the plugin's manifest entry needs the ID.
+If sign-in fails with a "developer error", the APK's signing SHA-1 is not
+one of the Android credentials from step 3. Debug and release builds are
+signed by different keys, and each needs its own credential.
 
 ## Layout
 
@@ -136,7 +142,8 @@ scripts/ui/                 HUD, crosshair and markers, touch controls, menu, le
 tests/                      headless checks: every level's rules, and an autoplay that clears levels
 audio/                      CC0 sound and music, see CREDITS.md
 models/enemies/             CC0 robot models and textures, see CREDITS.md
-addons/                     the Play Games plugin (disabled until set up)
+addons/                     the Play Games plugin
+android/                    the Android build template (build/ is git-ignored)
 android_icons/              adaptive launcher icon layers
 ```
 
