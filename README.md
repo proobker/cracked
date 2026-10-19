@@ -72,7 +72,7 @@ afterwards.
    (`%LOCALAPPDATA%\Android\Sdk`) and the Java SDK path (a JDK 17). Godot
    creates the debug keystore itself.
 3. The `Android` preset is already in `export_presets.cfg` (package
-   `com.proobker.cracked`, arm64-v8a + x86_64, landscape, immersive).
+   `com.cracked.pro`, arm64-v8a + x86_64, landscape, immersive).
 
 ```sh
 godot --headless --export-debug "Android" build/cracked-1.0.0.apk
@@ -93,7 +93,7 @@ in (step 4), the Android export fails**, because the plugin's manifest
 entry needs it.
 
 1. **Play Console** (one-time $25 developer account): create the app with
-   package name `com.proobker.cracked`.
+   package name `com.cracked.pro`.
 2. **A release keystore**, kept out of git (`*.keystore` is ignored) and
    backed up somewhere safe:
    ```sh
@@ -105,7 +105,7 @@ entry needs it.
    password `android`).
 3. **Play Console → Play Games Services → Setup**: create the Play Games
    project, then add an **Android credential** (an OAuth client) for
-   `com.proobker.cracked` with each SHA-1 from step 2. Copy the project's
+   `com.cracked.pro` with each SHA-1 from step 2. Copy the project's
    numeric **Project ID**. Under **Testers**, add your Google account while
    the game is unpublished.
 4. **In Godot**: Project → Export → Android. Paste the Project ID into
@@ -124,6 +124,24 @@ entry needs it.
 If sign-in fails with a "developer error", the APK's signing SHA-1 is not
 one of the Android credentials from step 3. Debug and release builds are
 signed by different keys, and each needs its own credential.
+
+Current setup: Play Games project ID `676484758327` (Cloud project
+`cracked-512108`), Android credentials for the release and debug keys,
+saved games on, OAuth consent screen published. `tools/play_games_setup.sh`
+walks through all of the above from scratch.
+
+## Release builds and the website
+
+```sh
+bash tools/build_release.sh   # asks for the keystore password; builds build/cracked.aab + build/cracked.apk
+bash tools/deploy_site.sh     # publishes site/ (and the builds) to gh-pages
+```
+
+The site at <https://cracked.rabidahal.com.np> (home, privacy policy, terms)
+lives in `site/` and is served by GitHub Pages from the `gh-pages` branch;
+Cloudflare has a DNS-only CNAME `cracked` → `proobker.github.io`. Upload
+`build/cracked.aab` to Play (Internal testing). Store screenshots come from
+`godot --path . --resolution 1920x1080 res://tests/capture_store.tscn`.
 
 ## Layout
 
