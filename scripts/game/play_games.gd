@@ -16,10 +16,10 @@ const PLUGIN_DIR := "res://addons/GodotPlayGameServices/scripts/"
 const SAVE_NAME := "progress"
 ## From Play Console → Play Games Services → Leaderboards. Empty = off.
 ## Scores submitted: the sum of the best score on every level.
-const LEADERBOARD_ID := ""
+const LEADERBOARD_ID := "CgkIt_aIjdgTEAIQBw"
 ## Level number → achievement ID, unlocked on that level's first clear.
 ## Empty IDs are skipped.
-const ACHIEVEMENTS := {10: "", 25: "", 50: "", 99: ""}
+const ACHIEVEMENTS := {10: "CgkIt_aIjdgTEAIQAw", 25: "CgkIt_aIjdgTEAIQBA", 50: "CgkIt_aIjdgTEAIQBQ", 99: "CgkIt_aIjdgTEAIQBg"}
 
 ## True once the plugin is up; the menu offers SIGN IN while not signed in.
 var available := false
