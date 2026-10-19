@@ -32,3 +32,6 @@ Thumbs.db
 *.jks
 export_credentials.cfg
 android/build/
+
+# Old local build copies (builds now go on GitHub releases)
+site/downloads/
