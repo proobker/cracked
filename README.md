@@ -141,7 +141,8 @@ The site at <https://cracked.rabidahal.com.np> (home, privacy policy, terms)
 lives in `site/` and is served by GitHub Pages from the `gh-pages` branch;
 Cloudflare has a DNS-only CNAME `cracked` → `proobker.github.io`. Upload
 `build/cracked.aab` to Play (Internal testing). Store screenshots come from
-`godot --path . --resolution 1920x1080 res://tests/capture_store.tscn`.
+`godot --path . --resolution 1920x1080 res://tests/capture_store.tscn` (saved to
+`store/screenshots/`).
 
 ## Layout
 
@@ -157,12 +158,18 @@ scripts/weapons/            weapon base, rifle, shotgun, marksman
 scripts/enemies/            enemy base, rusher, shooter, heavy, boss, projectile
 scripts/world/              rooms, the plaza, shared blockout builders and skyline
 scripts/ui/                 HUD, crosshair and markers, touch controls, menu, level select, settings
-tests/                      headless checks: every level's rules, and an autoplay that clears levels
+tests/                      headless checks: every level's rules, an autoplay that clears levels,
+                            and the store screenshot capture
 audio/                      CC0 sound and music, see CREDITS.md
 models/enemies/             CC0 robot models and textures, see CREDITS.md
 addons/                     the Play Games plugin
 android/                    the Android build template (build/ is git-ignored)
 android_icons/              adaptive launcher icon layers
+store/                      Play Store listing: text (listing.md), graphics, screenshots,
+                            Play Games achievement and leaderboard icons, ChatGPT prompts
+site/                       the website (cracked.rabidahal.com.np), published to gh-pages
+tools/                      release build, site deploy, Play Games setup wizard, image fitter
+build/                      exported .aab/.apk (git-ignored)
 ```
 
 ## Credits

@@ -1,37 +1,24 @@
-# Dependencies
-node_modules/
+# Godot editor cache (imports, UID cache, Play Games setup answers)
+.godot/
 
-# Build output
-dist/
+# Exported builds (tools/build_release.sh) and the Gradle build template
 build/
-.vite/
-*.tsbuildinfo
+android/build/
+*.apk
+*.aab
+*.idsig
 
-# Environment / secrets
+# Signing keys and their passwords: never commit
+*.keystore
+*.jks
+export_credentials.cfg
 .env
 .env.*
-!.env.example
 
-# Logs
+# Logs, editor and OS files
 *.log
-npm-debug.log*
-
-# Editor / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 *.swp
-
-# Godot
-.godot/
-*.apk
-*.aab
-*.idsig
-*.keystore
-*.jks
-export_credentials.cfg
-android/build/
-
-# Old local build copies (builds now go on GitHub releases)
-site/downloads/

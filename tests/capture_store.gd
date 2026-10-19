@@ -1,7 +1,7 @@
 extends Node
 ## Takes store screenshots from real play: boots each level, keeps the
 ## player alive while the first wave walks in, and saves the screen to
-## build/store/. Needs a window (not --headless):
+## store/screenshots/. Needs a window (not --headless):
 ##   godot --path . --resolution 1920x1080 res://tests/capture_store.tscn -- 3 10 27 45 63 99
 ## Restores the real progress file afterwards.
 
@@ -20,7 +20,7 @@ func _ready() -> void:
 	if _levels.is_empty():
 		_levels = [3, 10, 27, 45, 63, 99]
 	_saved = Progress.to_dict()
-	_out = ProjectSettings.globalize_path("res://build/store")
+	_out = ProjectSettings.globalize_path("res://store/screenshots")
 	DirAccess.make_dir_recursive_absolute(_out)
 	_next()
 

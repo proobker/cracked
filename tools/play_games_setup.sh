@@ -338,8 +338,8 @@ if confirm "Set these up now?"; then
   ask PGS_LEADERBOARD "Paste its ID (CgkI..., Enter to skip):"
   write_env PGS_LEADERBOARD "$PGS_LEADERBOARD"
   sed -i -E "s|^const LEADERBOARD_ID := \".*\"|const LEADERBOARD_ID := \"$PGS_LEADERBOARD\"|" scripts/game/play_games.gd
-  note "Icons: prompts 2–6 in build/store/chatgpt_prompts.md. Fit each download with"
-  note "  python tools/fit_image.py <download> build/store/<name>.png 512 512"
+  note "Icons: prompts 2–6 in store/chatgpt_prompts.md. Fit each download with"
+  note "  python tools/fit_image.py <download> store/play-games/<name>.png 512 512"
   step "Achievements → Create one each for levels 10, 25, 50 and 99."
   for n in 10 25 50 99; do
     ask "PGS_ACH_$n" "Level $n achievement ID:"
@@ -354,21 +354,21 @@ pause
 
 # ── 7 ─────────────────────────────────────────────────────────────────────
 stage "Store listing graphics"
-say "Ready in build/store/: icon_512.png and 8 real 1920×1080 gameplay screenshots"
+say "Ready in store/: graphics/icon_512.png and 8 real 1920×1080 gameplay screenshots"
 note "(re-take them: godot --path . --resolution 1920x1080 res://tests/capture_store.tscn)"
 say "The feature graphic (1024×500) comes from ChatGPT: prompt 1 in"
-say "  build/store/chatgpt_prompts.md"
+say "  store/chatgpt_prompts.md"
 ask FEATURE_SRC "Path to the downloaded feature image (Enter to skip):"
 if [[ -n "$FEATURE_SRC" && -f "$FEATURE_SRC" ]]; then
-  python tools/fit_image.py "$FEATURE_SRC" build/store/feature_graphic.png 1024 500
+  python tools/fit_image.py "$FEATURE_SRC" store/graphics/feature_graphic.png 1024 500
 else
-  SKIPPED+=("feature graphic: python tools/fit_image.py <download> build/store/feature_graphic.png 1024 500")
+  SKIPPED+=("feature graphic: python tools/fit_image.py <download> store/graphics/feature_graphic.png 1024 500")
 fi
 open_url "$CONSOLE"
 step "cracked → Grow users → Store presence → Main store listing → Graphics."
-step "App icon: build/store/icon_512.png. Feature graphic: build/store/feature_graphic.png."
-step "Phone screenshots: pick 4–8 from build/store/screenshot_level_*.png. Save."
-explorer.exe "$(cygpath -w build/store)" >/dev/null 2>&1 || true
+step "App icon: store/graphics/icon_512.png. Feature graphic: store/graphics/feature_graphic.png."
+step "Phone screenshots: pick 4–8 from store/screenshots/screenshot_level_*.png. Save."
+explorer.exe "$(cygpath -w store)" >/dev/null 2>&1 || true
 pause "Press Enter when the listing is saved."
 
 # ── 8 ─────────────────────────────────────────────────────────────────────
