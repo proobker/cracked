@@ -37,12 +37,25 @@ var _alive := 0
 var _cap := 0
 var _interval_left := 0.0
 var _walk_in_left := 0.0
+## Every enemy model, held so a spawn never waits on the disk.
+var _models := {}
 
 
 func start() -> void:
+	if _models.is_empty():
+		_load_models()
 	wave = 0
 	state = State.INTERVAL
 	_interval_left = first_delay
+
+
+func _load_models() -> void:
+	for kind: StringName in [&"rusher", &"shooter", &"shield", &"support", &"heavy", &"boss"]:
+		var e := make_enemy(kind)
+		e._configure()
+		if e.model_path != "" and not _models.has(e.model_path):
+			_models[e.model_path] = load(e.model_path)
+		e.free()
 
 
 func total_waves() -> int:

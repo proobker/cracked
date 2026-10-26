@@ -36,6 +36,9 @@ and normal save loading/writing. Disk tests explicitly exercise the redirected p
   restores its progress snapshot on normal completion.
 - smoke_level.gd: selected-level runtime smoke exercise.
 - capture_store.gd: screenshot utility, not a correctness test.
+- bench_level.gd: frame time and draw calls per level while firing into live
+  waves; needs a real renderer, e.g. `godot --rendering-method mobile
+  --disable-vsync --path . res://tests/bench_level.tscn -- --isolated 3 27 63`.
 
 Autoplay does not validate combat balance, ammo economy or device performance.
 Restoration is not guaranteed after interruption. Isolate user data and disable

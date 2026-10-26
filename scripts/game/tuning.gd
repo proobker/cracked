@@ -13,12 +13,17 @@ const SETTINGS := {
 	"touch_opacity": [0.15, 0.9],
 	"master_volume": [0.0, 1.0],
 	"music_volume": [0.0, 1.0],
+	"render_scale": [0.5, 1.0],
 }
 
 # Settings (§11)
 var sensitivity := 1.0 # multiplies every look source
 var master_volume := 0.9
 var music_volume := 0.6
+## The 3D view renders at this fraction of the screen, then upscales; the UI
+## stays sharp. Phones render at native resolution otherwise, which is most
+## of their frame.
+var render_scale := 1.0
 
 # Camera and aim (§4)
 var mouse_sens_deg_per_px := 0.12 # editor testing only
@@ -70,7 +75,18 @@ var touch_scale := 1.0
 
 
 func _ready() -> void:
+	if OS.has_feature("mobile"):
+		render_scale = 0.7
 	load_settings()
+	apply_graphics()
+
+
+func apply_graphics() -> void:
+	var root := get_tree().root
+	# FSR needs the Mobile or Forward+ renderer; Compatibility only has bilinear.
+	var fsr := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	root.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if fsr and render_scale < 1.0 else Viewport.SCALING_3D_MODE_BILINEAR
+	root.scaling_3d_scale = render_scale
 
 
 func load_settings() -> void:

@@ -76,6 +76,11 @@ func _ready() -> void:
 	_build_cover()
 	_trim()
 	_decor()
+	var doors: Array[Node] = []
+	for door in [_entry_door, _exit_door]:
+		if door:
+			doors.append(door)
+	Blockout.merge(self, doors)
 
 
 ## Where enemies appear: inside the far-wall alcoves, in world space.
@@ -166,7 +171,7 @@ func _gate(x: float) -> void:
 ## A slab that fills a doorway when closed and sinks into the floor when
 ## open, glowing red while locked and cyan while open.
 func _door(z: float) -> Node3D:
-	var door := Blockout.box(self, Vector3(DOOR_WIDTH, DOOR_HEIGHT, 0.6), Vector3(0.0, DOOR_HEIGHT / 2.0, z), Blockout.glow(Color(1.0, 0.1, 0.3), 1.6))
+	var door := Blockout.box(self, Vector3(DOOR_WIDTH, DOOR_HEIGHT, 0.6), Vector3(0.0, DOOR_HEIGHT / 2.0, z), Blockout.glow(Color(1.0, 0.1, 0.3), 1.6).duplicate())
 	return door
 
 

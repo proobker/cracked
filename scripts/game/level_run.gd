@@ -40,6 +40,10 @@ func _ready() -> void:
 	director.all_waves_cleared.connect(_on_room_cleared)
 
 
+func _exit_tree() -> void:
+	Blockout.clear_materials()
+
+
 func number() -> int:
 	return level["n"]
 
@@ -58,6 +62,7 @@ func start() -> void:
 
 func _start_room(i: int) -> void:
 	room_index = i
+	_show_near(i)
 	var room := rooms[i]
 	room.close_entry()
 	director.waves.assign(room.spec["waves"])
@@ -79,3 +84,10 @@ func _on_room_cleared() -> void:
 		level_complete.emit()
 		return
 	rooms[room_index].open_exit()
+
+
+## Draws only this room and its neighbours, lights included: the doors lock,
+## so nothing further can be seen anyway.
+func _show_near(i: int) -> void:
+	for j in rooms.size():
+		rooms[j].visible = absi(j - i) <= 1

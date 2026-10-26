@@ -1,7 +1,7 @@
 class_name SettingsPanel
 extends Control
 ## The v1 settings (§11): look sensitivity, FOV, aim assist, touch control
-## size and opacity, and volume. Changes apply live and save on close.
+## size and opacity, volume, and 3D resolution. Changes apply live and save on close.
 
 signal closed
 
@@ -13,6 +13,7 @@ const ROWS := [
 	["touch_opacity", "CONTROL OPACITY", 0.05],
 	["master_volume", "VOLUME", 0.05],
 	["music_volume", "MUSIC", 0.05],
+	["render_scale", "3D RESOLUTION", 0.05],
 ]
 
 var _values := {}
@@ -111,6 +112,8 @@ func _on_changed(value: float, key: String) -> void:
 	_show_value(key)
 	if key.ends_with("volume"):
 		Audio.apply_volumes()
+	elif key == "render_scale":
+		Tuning.apply_graphics()
 
 
 func _show_value(key: String) -> void:

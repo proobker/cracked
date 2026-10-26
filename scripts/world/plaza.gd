@@ -18,7 +18,12 @@ func _ready() -> void:
 	_cover()
 	_platform()
 	_landmarks()
+	Blockout.merge(self)
 	Blockout.skyline(self)
+
+
+func _exit_tree() -> void:
+	Blockout.clear_materials()
 
 
 func _floor_and_walls() -> void:

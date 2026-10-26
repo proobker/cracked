@@ -28,6 +28,9 @@ var _overlay_title: Label
 var _overlay_body: Label
 var _overlay_buttons: HBoxContainer
 var _combo_flash := 0.0
+## Debug builds only: frame rate and draw calls, refreshed twice a second.
+var _perf: Label
+var _perf_left := 0.0
 
 
 func _ready() -> void:
@@ -101,6 +104,11 @@ func _ready() -> void:
 		slot_row.add_child(slot)
 		_slots.append(slot)
 
+	if OS.is_debug_build():
+		_perf = _label(16, HORIZONTAL_ALIGNMENT_RIGHT)
+		_place(_perf, 1.0, 0.0, -324, 108, -24, 130)
+		add_child(_perf)
+
 	_build_overlay()
 	set_score(0, 1)
 
@@ -123,6 +131,11 @@ func _process(delta: float) -> void:
 			_combo.modulate = Color.WHITE
 	if _hurt.color.a > 0.0:
 		_hurt.color.a = maxf(0.0, _hurt.color.a - delta * 0.8)
+	if _perf:
+		_perf_left -= delta
+		if _perf_left <= 0.0:
+			_perf_left = 0.5
+			_perf.text = "%d FPS  %d DRAWS" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)]
 
 
 func set_health(health: float, max_health: float) -> void:
@@ -283,5 +296,7 @@ func _place(control: Control, ax: float, ay: float, left: float, top: float, rig
 	control.offset_bottom = bottom
 
 func set_progress(level: int, coins: int, unbanked: int, grenade: String, charges: int, practice: bool) -> void:
-	_progress.text = "PRACTICE - no rewards" if practice else "LV %d  |  BANK %d  |  ROOM +%d" % [level, coins, unbanked]
-	_progress.text += "\n%s  %d  [G / LB]" % [grenade.to_upper() if not grenade.is_empty() else "GRENADES LOCKED", charges]
+	# Called every frame: set the text once, so an unchanged value costs no relayout.
+	var text := "PRACTICE - no rewards" if practice else "LV %d  |  BANK %d  |  ROOM +%d" % [level, coins, unbanked]
+	text += "\n%s  %d  [G / LB]" % [grenade.to_upper() if not grenade.is_empty() else "GRENADES LOCKED", charges]
+	_progress.text = text

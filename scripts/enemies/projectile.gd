@@ -23,17 +23,19 @@ func _ready() -> void:
 	add_child(shape)
 
 	var mesh := MeshInstance3D.new()
-	var ball := SphereMesh.new()
-	ball.radius = 0.22
-	ball.height = 0.44
-	mesh.mesh = ball
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = color.lightened(0.4)
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = 5.0
-	mesh.material_override = mat
+	mesh.mesh = Blockout.shared([&"bolt_mesh"], func() -> SphereMesh:
+		var ball := SphereMesh.new()
+		ball.radius = 0.22
+		ball.height = 0.44
+		return ball)
+	mesh.material_override = Blockout.shared([&"bolt", color], func() -> StandardMaterial3D:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = color.lightened(0.4)
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = 5.0
+		return mat)
 	add_child(mesh)
 
 	body_entered.connect(_on_body_entered)
