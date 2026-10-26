@@ -10,6 +10,7 @@ signal overlay_action(id: StringName)
 var score_source: Score
 
 var _health_bar: ProgressBar
+var _progress: Label
 var _ammo: Label
 var _slots: Array[Label] = []
 var _wave: Label
@@ -18,6 +19,8 @@ var _combo: Label
 var _grace_bar: ProgressBar
 var _banner: Label
 var _banner_left := 0.0
+var _notice: Label
+var _notice_left := 0.0
 var _crosshair: Crosshair
 var _hurt: ColorRect
 var _overlay: ColorRect
@@ -51,6 +54,9 @@ func _ready() -> void:
 	_health_bar.add_theme_stylebox_override("background", _flat(Color(0.0, 0.0, 0.0, 0.45)))
 	add_child(_health_bar)
 
+	_progress = _label(17, HORIZONTAL_ALIGNMENT_LEFT)
+	_place(_progress, 0.0, 0.0, 24, 45, 450, 98)
+	add_child(_progress)
 	_wave = _label(28, HORIZONTAL_ALIGNMENT_CENTER)
 	_place(_wave, 0.5, 0.0, -300, 12, 300, 52)
 	add_child(_wave)
@@ -58,6 +64,11 @@ func _ready() -> void:
 	_banner = _label(44, HORIZONTAL_ALIGNMENT_CENTER)
 	_place(_banner, 0.5, 0.5, -500, -190, 500, -120)
 	add_child(_banner)
+	# Separate from the banner, which wave countdowns keep rewriting.
+	_notice = _label(24, HORIZONTAL_ALIGNMENT_CENTER)
+	_notice.add_theme_color_override("font_color", Color(1.0, 0.35, 0.65))
+	_place(_notice, 0.5, 0.0, -420, 56, 420, 92)
+	add_child(_notice)
 
 	_score = _label(26, HORIZONTAL_ALIGNMENT_RIGHT)
 	_place(_score, 1.0, 0.0, -324, 12, -24, 48)
@@ -101,6 +112,11 @@ func _process(delta: float) -> void:
 		_banner_left -= delta
 		if _banner_left <= 0.0:
 			_banner.text = ""
+	if _notice_left > 0.0:
+		_notice_left -= delta
+		_notice.modulate.a = clampf(_notice_left, 0.0, 1.0)
+		if _notice_left <= 0.0:
+			_notice.text = ""
 	if _combo_flash > 0.0:
 		_combo_flash -= delta
 		if _combo_flash <= 0.0:
@@ -171,6 +187,13 @@ func show_marker(kind: String) -> void:
 func banner(text: String, seconds := 1.5) -> void:
 	_banner.text = text
 	_banner_left = seconds
+
+
+## A system message that outlives wave banners; fades over its last second.
+func notice(text: String, seconds := 5.0) -> void:
+	_notice.text = text
+	_notice.modulate.a = 1.0
+	_notice_left = seconds
 
 
 ## buttons: an array of [id, label] pairs. The first one takes focus, so a
@@ -258,3 +281,7 @@ func _place(control: Control, ax: float, ay: float, left: float, top: float, rig
 	control.offset_top = top
 	control.offset_right = right
 	control.offset_bottom = bottom
+
+func set_progress(level: int, coins: int, unbanked: int, grenade: String, charges: int, practice: bool) -> void:
+	_progress.text = "PRACTICE - no rewards" if practice else "LV %d  |  BANK %d  |  ROOM +%d" % [level, coins, unbanked]
+	_progress.text += "\n%s  %d  [G / LB]" % [grenade.to_upper() if not grenade.is_empty() else "GRENADES LOCKED", charges]

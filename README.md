@@ -1,33 +1,50 @@
 # cracked
 
-A 3D room-clearing FPS for Android. A neon-lit death run, ninety-nine levels deep.
+A 3D room-clearing FPS for Android. A neon-lit death run across a hostile galaxy.
 The design is in [plans.md](plans.md); read it before adding anything.
+For expansion implementation, continue to the [agent handoff](docs/expansion-implementation.md).
+[Release history](release.md) tracks versions; [the documentation index](docs/README.md)
+links code guides in their respective folders.
 
 ## Status
 
-v2 in progress (see plans.md §11). 99 levels, each a chain of one to four
+**v1 is built and publication is underway.** The supplied Play Console record
+lists **1.0.1 / code 2** as Active on 19 October 2026; the release track and
+public availability are unspecified. See [release.md](release.md).
+
+The campaign is generated: each level is a chain of one to four
 rectangular rooms, each level in its own colour theme, each room in one of
 seven cover layouts, and some levels carrying a modifier (swarm,
 crossfire, juggernaut, blackout, overdrive). Enemies weave, strafe and
 juke. The guns have bloom, recoil with recovery, flash, tracers, impacts,
 and a viewmodel that never clips into walls. Enemies only come through gates in a room's far wall.
 The entry door locks behind you and the exit opens on the clear. Every
-tenth level ends in a boss room. There's a level select, and progress is
-saved on the phone. The rest is from v1.0.0: five moves, three guns
+tenth level ends in a boss room. Past the campaign wait a one-room finale (25 waves of bosses) and an endless level with almost no regen. There's a level select, and progress is
+saved on the phone. The baseline also includes five moves, three guns
 (rifle, shotgun, marksman), three enemy types plus the boss, the combo,
 regen, the HUD with hit / weak-point / kill markers, audio, touch and
 gamepad controls, settings, and the plaza as menu backdrop and practice
 range.
 
+### Arsenal & Skills — implemented, unreleased
+
+The working tree now includes player XP, a 405-node branching icon skill tree, enemy coins banked at room clears,
+permanent skill upgrades, three-gun loadouts, six new guns, three grenades and
+two enemy types. See [plans §16](plans.md#16-arsenal--skills--expansion)
+for rules and milestones. Open **ARMORY** from the menu or level select.
+Use **Practice build** to try unlocked gear and skills without changing campaign
+progress; start Practice Range from the menu to use that preview build. The old rooms-and-levels “v2” label was a design
+iteration, not a released Android 2.0 version.
+
 ## Install on a phone
 
-1. Get `build/cracked-1.0.0.apk` (build it as below).
+1. Get `build/cracked-debug.apk` (build it as below).
 2. On the phone, allow installs from unknown sources for your file manager,
-   or use USB debugging and run `adb install -r build/cracked-1.0.0.apk`.
+   or use USB debugging and run `adb install -r build/cracked-debug.apk`.
 
-The APK is **debug-signed**. Before a store release it needs a release
-keystore, and a release-signed build can't upgrade a debug install (you'd
-uninstall first).
+The command below produces a **debug-signed** development build. Store builds
+use the release-signing workflow. A release-signed build cannot upgrade an
+installation signed with a different debug key.
 
 ## Controls
 
@@ -43,6 +60,7 @@ uninstall first).
 | Reload | R | X | R |
 | Swap weapon | SWAP (skips dry guns) | Y | Tab, wheel, 1/2/3 |
 | Scope (marksman) | SCOPE | Left trigger | Right mouse |
+| Grenade | G: hold to preview, release to throw; drag outside to cancel | Left bumper | G |
 | Pause | II | Start | Esc |
 
 ## Requirements
@@ -56,14 +74,28 @@ Open `project.godot` in Godot and press F5, or run `godot --path .`.
 
 ## Tests
 
+The runner isolates Godot user/editor data under ignored build/test-profile,
+passes --isolated to disable live cloud writes, and fails on runtime errors.
+
 ```sh
-godot --headless --path . res://tests/check_levels.tscn     # all 99 levels obey the room rules
-godot --headless --path . res://tests/autoplay.tscn -- 1 10 99   # clear levels unattended
-godot --headless --path . res://tests/smoke_level.tscn --quit-after 1500 -- 45
+rtk python tools/check_game.py --editor --quit
+rtk python tools/check_game.py res://tests/check_expansion.tscn
+rtk python tools/check_game.py res://tests/check_combat.tscn
+rtk python tools/check_game.py res://tests/check_levels.tscn
+rtk python tools/check_game.py res://tests/autoplay.tscn -- 1 10 15 25 45 99
+rtk python tools/check_game.py --rendered res://tests/capture_armory.tscn
+rtk python tools/check_game.py res://tests/check_visuals.tscn
+rtk python tools/check_game.py --rendered res://tests/capture_visuals.tscn
+rtk python tools/check_game.py --rendered res://tests/check_mouse_capture.tscn
+# Android emulator/phone: debug APK, on-device checks, real touch tour
+rtk python tools/check_android.py
 ```
 
-Each exits non-zero on a failure. The autoplay restores your saved progress
-afterwards.
+Set GODOT to your executable if it is not found automatically. The rendered
+check captures screenshots under build/ using an offscreen desktop window.
+See [test coverage and limitations](tests/README.md). The Android checks run
+on an emulator; real-phone thermal performance, thumb comfort and Play Games
+account testing remain release checks.
 
 ## Build the APK
 
@@ -75,7 +107,7 @@ afterwards.
    `com.cracked.pro`, arm64-v8a + x86_64, landscape, immersive).
 
 ```sh
-godot --headless --export-debug "Android" build/cracked-1.0.0.apk
+godot --headless --export-debug "Android" build/cracked-debug.apk
 ```
 
 ## Google Play Games
@@ -88,11 +120,11 @@ the plugin is enabled with its autoload, the Android build template is
 installed in `android/`, and the Android export uses a Gradle build. On
 desktop, and on a phone until you sign in, the game runs offline as before.
 
-What's left needs your Google accounts. **Until the Project ID is pasted
-in (step 4), the Android export fails**, because the plugin's manifest
-entry needs it.
+This repository already has project configuration recorded below. The steps
+that follow are setup/recovery reference, not a claim that setup is still
+pending. A fresh configuration needs the Project ID for the plugin manifest.
 
-1. **Play Console** (one-time $25 developer account): create the app with
+1. **Play Console**: create the app with
    package name `com.cracked.pro`.
 2. **A release keystore**, kept out of git (`*.keystore` is ignored) and
    backed up somewhere safe:
@@ -113,11 +145,13 @@ entry needs it.
    alias and passwords under **Keystore → Release**. Do not commit
    passwords: Godot keeps them in `.godot/export_credentials.cfg`, which is
    git-ignored.
-5. Optional: create a leaderboard and achievements in the Play Console and
+5. For a fresh setup, create a leaderboard and achievements in the Play Console and
    paste their IDs into the constants at the top of
    `scripts/game/play_games.gd`. The leaderboard takes the sum of your best
    score on every level. The achievements fire on the first clear of
-   levels 10, 25, 50 and 99.
+   levels 10, 25, 50, 99 and 100 ("Galaxy Conquered": its ID is empty until
+   you create it; the icon is `store/achievements/galaxy_conquered.png`).
+   `ENDLESS_LEADERBOARD_ID` is optional and takes the furthest endless wave.
 6. Build a release-signed APK (`--export-release "Android" build/cracked.apk`)
    and install it. The menu shows your gamer name, or a SIGN IN button.
 
@@ -150,7 +184,7 @@ Cloudflare has a DNS-only CNAME `cracked` → `proobker.github.io`. Upload
 scenes/menu.tscn            title screen (main scene)
 scenes/main.tscn            a run or the practice range; scripts/game/main.gd builds it
 scripts/game/               main, tuning (every tunable + saved settings), audio,
-                            levels (the 99, generated), level run (rooms in order),
+                            levels (generated campaign, finale, endless), level run,
                             wave director (one room's waves), progress, score, pickups
 scripts/input/              the single input layer: touch, gamepad, keyboard → intents
 scripts/player/             movement, health, aim assist, weapon slots
@@ -171,6 +205,13 @@ site/                       the website (cracked.rabidahal.com.np), published to
 tools/                      release build, site deploy, Play Games setup wizard, image fitter
 build/                      exported .aab/.apk (git-ignored)
 ```
+
+## Code documentation
+
+[docs/README.md](docs/README.md) indexes the guides colocated with game systems,
+player, weapons, enemies, input, UI, world, scenes, shaders, tests, tools,
+website, Android exports and addons. They distinguish current behavior from
+implemented expansion behavior and remaining release validation.
 
 ## Credits
 

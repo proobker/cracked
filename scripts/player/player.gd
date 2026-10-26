@@ -13,8 +13,32 @@ signal shot_result(result: String)
 const STAND_EYE := 1.6
 const LOW_EYE := 1.0
 
+var build := {}
+var effects := {}
+var grenade_kind := ""
+var grenades := 2
+var grenade_cap := 2
+var burn_lock := 0.0
+var dash_bonus := 0.0
+var blast_bonus := 0.0
+var focus_bonus := 0.0
+var _near_bonus := 0.0
+var _near_cooldown := 0.0
+var _primed := false
+var _hit_target: Object
+var _hit_count := 0
+var _throw_left := 0.0
+var _preview := false
+var _grenade_blocked := true
+var _preview_mesh: MeshInstance3D
+var _aim_velocity := Vector3.ZERO
+var _sprint_ready := 0.0
 var health: float
 var dead := false
+## Regen multiplier and extra wait before it starts; the endless level
+## barely heals.
+var regen_scale := 1.0
+var regen_extra_delay := 0.0
 var head: Node3D
 var camera: Camera3D
 var weapon: Weapon
@@ -44,6 +68,15 @@ func _ready() -> void:
 	collision_layer = 2
 	collision_mask = 1
 	health = Tuning.max_health
+	if build.is_empty():
+		build = Progress.snapshot()
+	effects = build.get("effects", {}).duplicate()
+	grenade_kind = String(build.get("grenade", ""))
+	grenade_cap = 2 + int(effects.get("grenade_capacity", 0))
+	grenades = 0 if grenade_kind.is_empty() else 2
+	_preview_mesh = MeshInstance3D.new()
+	_preview_mesh.top_level = true
+	add_child(_preview_mesh)
 
 	var shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
@@ -63,7 +96,10 @@ func _ready() -> void:
 	head.add_child(camera)
 	camera.make_current()
 
-	for w: Weapon in [Rifle.new(), Shotgun.new(), Marksman.new()]:
+	for id: String in build.get("guns", Arsenal.DEFAULT):
+		var w := Arsenal.make(id)
+		w.wielder = self
+		w.effects = effects.duplicate()
 		w.camera = camera
 		w.fx_parent = get_parent() as Node3D
 		camera.add_child(w)
@@ -87,10 +123,13 @@ func _physics_process(delta: float) -> void:
 	if wish.length() > 1.0:
 		wish = wish.normalized()
 
+	var was_sprinting := sprinting
 	sprinting = (
 		PlayerInput.wants_sprint() and mv.y < -0.3 and sprint_meter > 0.0
 		and not crouched and not sliding
 	)
+	if was_sprinting and not sprinting:
+		_sprint_ready = 0.15 / (1.0 + 0.25 * skill("sprint_recovery"))
 	if sprinting:
 		sprint_meter = maxf(0.0, sprint_meter - delta / Tuning.sprint_meter_seconds)
 	else:
@@ -102,13 +141,15 @@ func _physics_process(delta: float) -> void:
 		_dash_vel = dir.normalized() * Tuning.dash_speed
 		_dash_left = Tuning.dash_duration
 		_iframes_left = Tuning.dash_iframes
-		_dash_cooldown_left = Tuning.dash_cooldown # longer than the dash: no chaining
+		_dash_cooldown_left = Tuning.dash_cooldown * (1.0 - 0.1 * skill("dash_cooldown"))
+		dash_bonus = 2.0
 		Audio.play(&"dash")
 
 	if Input.is_action_just_pressed("crouch") and not sliding:
 		var flat := Vector3(velocity.x, 0.0, velocity.z)
 		if sprinting and is_on_floor() and flat.length() > 0.1:
 			sliding = true
+			_primed = effects.has("slide_stagger")
 			crouched = true
 			_slide_vel = flat.normalized() * maxf(Tuning.slide_speed, flat.length())
 		else:
@@ -131,7 +172,7 @@ func _physics_process(delta: float) -> void:
 		h = _dash_vel
 	elif sliding:
 		if is_on_floor():
-			_slide_vel = _slide_vel.move_toward(Vector3.ZERO, Tuning.slide_friction * delta)
+			_slide_vel = _slide_vel.move_toward(Vector3.ZERO, Tuning.slide_friction * (1.0 - 0.1 * skill("slide_distance")) * delta)
 		h = _slide_vel
 		if _slide_vel.length() < Tuning.slide_min_speed:
 			sliding = false
@@ -141,8 +182,8 @@ func _physics_process(delta: float) -> void:
 			speed = Tuning.sprint_speed
 		elif crouched:
 			speed = Tuning.crouch_speed
-		var accel: float = Tuning.ground_accel if is_on_floor() else Tuning.air_accel
-		h = h.move_toward(wish * speed, accel * delta)
+		var accel: float = Tuning.ground_accel if is_on_floor() else Tuning.air_accel * (1.0 + 0.2 * skill("air_control"))
+		h = h.move_toward(wish * speed * (1.2 if _near_bonus > 0.0 else 1.0), accel * delta)
 	velocity.x = h.x
 	velocity.z = h.z
 	move_and_slide()
@@ -150,19 +191,29 @@ func _physics_process(delta: float) -> void:
 	var eye: float = LOW_EYE if (crouched or sliding) else STAND_EYE
 	head.position.y = move_toward(head.position.y, eye, 6.0 * delta)
 
-	_weapon_input()
+	_grenade_input(delta)
+	if _throw_left <= 0.0:
+		_weapon_input()
 	var flat_speed := Vector2(velocity.x, velocity.z).length()
 	weapon.set_motion(_last_look, flat_speed / Tuning.sprint_speed, not is_on_floor(), sprinting)
-	var kick := weapon.tick(delta, Input.is_action_pressed("fire"), Input.is_action_just_pressed("reload"), crouched)
+	var kick := Vector2.ZERO
+	if _throw_left <= 0.0:
+		kick = weapon.tick(delta, Input.is_action_pressed("fire") and _sprint_ready <= 0.0, Input.is_action_just_pressed("reload"), crouched)
+	else:
+		weapon._animate(delta)
 	_recoil(kick, delta)
 	var fov: float = weapon.scoped_fov if weapon.scoped else Tuning.fov
-	camera.fov = move_toward(camera.fov, fov, 300.0 * delta)
+	camera.fov = move_toward(camera.fov, fov, 300.0 * (1.0 + 0.25 * skill("scope_speed")) * delta)
 	_shake(delta)
 
 
 func take_damage(amount: float, source: String) -> void:
 	if dead or _iframes_left > 0.0:
 		return
+	if sliding:
+		amount *= 1.0 - 0.1 * skill("slide_guard")
+	if dash_bonus > 0.0:
+		amount *= 1.0 - 0.08 * skill("dash_guard")
 	health = maxf(0.0, health - amount)
 	_since_damage = 0.0
 	add_trauma(0.45)
@@ -184,7 +235,7 @@ func weapon_by_kind(kind: StringName) -> Weapon:
 	for w in weapons:
 		if w.kind == kind:
 			return w
-	return weapons[0]
+	return null
 
 
 func equip(slot: int) -> void:
@@ -284,12 +335,20 @@ func _look(delta: float) -> void:
 
 
 func _tick_timers(delta: float) -> void:
+	burn_lock = maxf(0.0, burn_lock - delta)
+	dash_bonus = maxf(0.0, dash_bonus - delta)
+	blast_bonus = maxf(0.0, blast_bonus - delta)
+	focus_bonus = maxf(0.0, focus_bonus - delta)
+	_near_bonus = maxf(0.0, _near_bonus - delta)
+	_near_cooldown = maxf(0.0, _near_cooldown - delta)
+	_throw_left = maxf(0.0, _throw_left - delta)
+	_sprint_ready = maxf(0.0, _sprint_ready - delta)
 	_dash_left = maxf(0.0, _dash_left - delta)
 	_dash_cooldown_left = maxf(0.0, _dash_cooldown_left - delta)
 	_iframes_left = maxf(0.0, _iframes_left - delta)
 	_since_damage += delta
-	if _since_damage >= Tuning.regen_delay and health < Tuning.max_health:
-		health = minf(Tuning.max_health, health + Tuning.regen_per_sec * delta)
+	if _since_damage >= Tuning.regen_delay + regen_extra_delay and health < Tuning.max_health:
+		health = minf(Tuning.max_health, health + Tuning.regen_per_sec * regen_scale * delta)
 		health_changed.emit(health, Tuning.max_health)
 
 
@@ -319,3 +378,92 @@ func _cause_of_death(source: String) -> String:
 	elif sliding:
 		cause += " mid-slide"
 	return cause
+
+func skill(id: String) -> float:
+	return float(effects.get(id, 0))
+
+func consume_stagger() -> float:
+	var result := 0.6 if _primed else 0.0
+	_primed = false
+	return result
+
+func hit_stagger(enemy: Enemy) -> float:
+	if _hit_target != enemy:
+		_hit_target = enemy
+		_hit_count = 0
+	_hit_count += 1
+	if _hit_count % 4 == 0:
+		if effects.has("focus_fire"):
+			focus_bonus = 2.0
+		return 0.1 * skill("sustained_stagger")
+	return 0.0
+
+func combat_hit(_enemy: Enemy, result: String, weak: bool, source: StringName) -> void:
+	if result != "kill":
+		return
+	if weak and effects.has("precision_feed"):
+		var gun := weapon_by_kind(source)
+		if gun:
+			var moved := mini(2, mini(gun.reserve, gun.mag_size - gun.mag))
+			gun.reserve -= moved
+			gun.mag += moved
+			gun.ammo_changed.emit(gun)
+	if Arsenal.GRENADES.has(String(source)) and effects.has("blast_reload"):
+		blast_bonus = 3.0
+
+func near_miss() -> void:
+	if is_dashing() and effects.has("near_miss") and _near_cooldown <= 0.0:
+		_near_bonus = 2.0
+		_near_cooldown = 4.0
+
+func cancel_grenade() -> void:
+	_preview = false
+	_grenade_blocked = true
+	if is_instance_valid(_preview_mesh):
+		_preview_mesh.visible = false
+
+func _grenade_input(delta: float) -> void:
+	if not Input.is_action_pressed("grenade"):
+		if _preview and not _grenade_blocked:
+			throw_grenade()
+		_preview = false
+		_grenade_blocked = false
+		_preview_mesh.visible = false
+		return
+	if _grenade_blocked or grenades < 1 or _throw_left > 0.0:
+		return
+	_preview = true
+	var deviation := Vector3(velocity.x, 0, velocity.z) * 0.18 * (1.0 - 0.25 * skill("throw_accuracy"))
+	_aim_velocity = -camera.global_basis.z * 16.0 + Vector3.UP * 4.0 + deviation
+	var mesh := ImmediateMesh.new()
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	var at := camera.global_position
+	var v := _aim_velocity
+	for _i in 36:
+		var state := Ordnance.step(self, at, v, 0.05)
+		mesh.surface_add_vertex(at)
+		mesh.surface_add_vertex(state.position)
+		at = state.position
+		v = state.velocity
+	mesh.surface_end()
+	_preview_mesh.mesh = mesh
+	if not _preview_mesh.material_override:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = Color(0.2, 1.0, 0.8)
+		_preview_mesh.material_override = mat
+	_preview_mesh.visible = true
+
+func throw_grenade() -> void:
+	if grenades < 1 or grenade_kind.is_empty() or _throw_left > 0.0:
+		return
+	var ball := Ordnance.new()
+	ball.kind = StringName(grenade_kind)
+	ball.position = camera.global_position
+	ball.motion = _aim_velocity
+	ball.player = self
+	ball.effects = effects.duplicate()
+	get_parent().add_child(ball)
+	grenades -= 1
+	_throw_left = 0.5 * (1.0 - 0.12 * skill("throw_recovery"))
+	_preview = false

@@ -66,13 +66,16 @@ func _start_room(i: int) -> void:
 	director.min_spawn_distance = Tuning.room_spawn_distance
 	director.boss_scale = Levels.boss_scale(number())
 	director.speed_scale = Levels.speed_scale(level["modifier"])
+	director.endless = level.get("endless", false)
+	if director.endless:
+		director.boss_scale = 0.8
 	director.start()
 	room_started.emit(i, rooms.size())
 
 
 func _on_room_cleared() -> void:
+	room_cleared.emit(room_index, rooms.size())
 	if room_index >= rooms.size() - 1:
 		level_complete.emit()
 		return
 	rooms[room_index].open_exit()
-	room_cleared.emit(room_index, rooms.size())

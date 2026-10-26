@@ -6,11 +6,15 @@ extends Control
 
 const STICK_RADIUS := 90.0
 const SPRINT_RING := 1.15 # push this far past the stick's edge to sprint
-const STICK_ZONE := 0.42 # left fraction of the screen that spawns the stick
+## The stick never moves: a touch this many radii from its home grabs it.
+const STICK_GRAB := 2.0
+## Home of the stick, from the bottom-left corner.
+const STICK_HOME := Vector2(180, -170)
 
 ## Button centers are offsets from the bottom-right corner, except "pause",
 ## which is offset from the top center.
 var _buttons: Array[Dictionary] = [
+	{"action": &"grenade", "label": "G", "offset": Vector2(-410, -180), "r": 36.0},
 	{"action": &"fire", "label": "FIRE", "offset": Vector2(-170, -200), "r": 72.0},
 	{"action": &"jump", "label": "JUMP", "offset": Vector2(-80, -86), "r": 48.0},
 	{"action": &"crouch", "label": "SLIDE", "offset": Vector2(-205, -66), "r": 44.0},
@@ -54,6 +58,8 @@ func set_shown(shown: bool) -> void:
 
 ## Releases every held finger. Called on pause so nothing stays pressed.
 func reset() -> void:
+	if is_instance_valid(player):
+		player.cancel_grenade()
 	for action in _button_fingers.values():
 		PlayerInput.release(action)
 	_button_fingers.clear()
@@ -89,27 +95,39 @@ func _on_down(finger: int, pos: Vector2) -> void:
 				_look_finger = finger
 			queue_redraw()
 			return
-	if pos.x < size.x * STICK_ZONE:
-		if _stick_finger == -1:
-			_stick_finger = finger
-			_stick_origin = pos
-			_stick_knob = pos
-			queue_redraw()
+	var home := _stick_home()
+	if _stick_finger == -1 and pos.distance_to(home) <= STICK_RADIUS * Tuning.touch_scale * STICK_GRAB:
+		_stick_finger = finger
+		_stick_origin = home
+		_move_stick(pos)
 	elif _look_finger == -1:
 		_look_finger = finger
 
 
 func _on_drag(finger: int, pos: Vector2, relative: Vector2) -> void:
+	if _button_fingers.get(finger) == &"grenade":
+		for b in _buttons:
+			if b.action == &"grenade" and pos.distance_to(_center(b)) > float(b.r) * Tuning.touch_scale * 1.5:
+				player.cancel_grenade()
+				PlayerInput.release(&"grenade")
+				_button_fingers.erase(finger)
 	if finger == _stick_finger:
-		var radius := STICK_RADIUS * Tuning.touch_scale
-		var offset := pos - _stick_origin
-		var amount := offset.length() / radius
-		PlayerInput.touch_sprint = amount > SPRINT_RING
-		PlayerInput.touch_move = offset.limit_length(radius) / radius
-		_stick_knob = _stick_origin + offset.limit_length(radius)
-		queue_redraw()
+		_move_stick(pos)
 	if finger == _look_finger:
 		PlayerInput.add_touch_look(relative)
+
+
+func _move_stick(pos: Vector2) -> void:
+	var radius := STICK_RADIUS * Tuning.touch_scale
+	var offset := pos - _stick_origin
+	PlayerInput.touch_sprint = offset.length() / radius > SPRINT_RING
+	PlayerInput.touch_move = offset.limit_length(radius) / radius
+	_stick_knob = _stick_origin + offset.limit_length(radius)
+	queue_redraw()
+
+
+func _stick_home() -> Vector2:
+	return Vector2(0.0, size.y) + STICK_HOME * Tuning.touch_scale
 
 
 func _on_up(finger: int) -> void:
@@ -131,6 +149,8 @@ func _ready_fraction(action: StringName) -> float:
 	match action:
 		&"dash":
 			return player.dash_ready_fraction()
+		&"grenade":
+			return 1.0 if player.grenades > 0 else 0.0
 		&"scope":
 			return 1.0 if player.weapon.can_scope else 0.0
 	return 1.0
@@ -162,12 +182,12 @@ func _draw() -> void:
 		draw_string(font, c + Vector2(-text_size.x / 2.0, font_size / 3.0), label,
 			HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, Color(1, 1, 1, alpha * 1.6))
 
+	# The stick always sits at home; only the knob moves.
 	var radius := STICK_RADIUS * Tuning.touch_scale
-	if _stick_finger != -1:
-		draw_arc(_stick_origin, radius, 0.0, TAU, 48, Color(1, 1, 1, alpha), 3.0)
-		draw_arc(_stick_origin, radius * SPRINT_RING, 0.0, TAU, 48, Color(1, 0.8, 0.2, alpha * 0.6), 2.0)
-		draw_circle(_stick_knob, radius * 0.4, Color(1, 1, 1, alpha))
-	else:
-		# Resting hint for where the stick lives.
-		var hint := Vector2(180, size.y - 170)
-		draw_arc(hint, radius, 0.0, TAU, 48, Color(1, 1, 1, alpha * 0.4), 2.0)
+	var home := _stick_home()
+	var held := _stick_finger != -1
+	draw_circle(home, radius, Color(1, 1, 1, alpha * (0.14 if held else 0.08)))
+	draw_arc(home, radius, 0.0, TAU, 48, Color(1, 1, 1, alpha * (1.0 if held else 0.5)), 3.0 if held else 2.0)
+	if held:
+		draw_arc(home, radius * SPRINT_RING, 0.0, TAU, 48, Color(1, 0.8, 0.2, alpha * 0.6), 2.0)
+	draw_circle(_stick_knob if held else home, radius * 0.4, Color(1, 1, 1, alpha * (1.0 if held else 0.45)))

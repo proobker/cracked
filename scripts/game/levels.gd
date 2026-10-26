@@ -1,5 +1,7 @@
 class_name Levels
-## The 99 levels (§7). Each is generated from its number with a seeded RNG,
+## The levels (§7): a generated campaign, then a hand-built finale (one vast
+## room, 25 boss waves) and an endless level. Players never see the count;
+## the map shows named stars. Each campaign level is generated from its number with a seeded RNG,
 ## so level n is always the same level and nothing is stored. A level is a
 ## theme, an optional modifier, and a chain of rectangular rooms; a room is
 ## a shape, a layout of cover, how many gates its far wall has, and the
@@ -10,7 +12,13 @@ class_name Levels
 ## level, and of level 99, is a boss room. Variety comes from what the rooms
 ## look like and how they are laid out, never from breaking the bands.
 
-const COUNT := 99
+const COUNT := 101
+## The generated campaign; the two levels after it are hand-built.
+const CAMPAIGN := 99
+## One vast open room, 25 waves of bosses.
+const FINALE := 100
+## Endless waves, barely any regen: what is left after the galaxy falls.
+const ENDLESS := 101
 
 ## Wave spec keys are WaveDirector's: r = rusher, s = shooter, h = heavy,
 ## b = boss, cap = how many may be alive at once.
@@ -56,6 +64,10 @@ const MODIFIERS := {
 
 static func get_level(n: int) -> Dictionary:
 	n = clampi(n, 1, COUNT)
+	if n == FINALE:
+		return _finale()
+	if n == ENDLESS:
+		return _endless()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7919 * n + 13
 	var modifier := _modifier(n, rng)
@@ -70,16 +82,33 @@ static func get_level(n: int) -> Dictionary:
 		"n": n,
 		"rooms": rooms,
 		"boss": is_boss_level(n),
-		"theme": THEMES[(n * 3) % THEMES.size()],
+		"theme": theme_for(n),
 		"modifier": modifier,
 	}
 
 
+## The level's lighting, without building the level.
+static func theme_for(n: int) -> Dictionary:
+	if n == FINALE:
+		return THEMES[6]
+	if n == ENDLESS:
+		return THEMES[4]
+	return THEMES[(n * 3) % THEMES.size()]
+
+
 static func is_boss_level(n: int) -> bool:
-	return n % 10 == 0 or n == COUNT
+	if n == ENDLESS:
+		return false
+	return n % 10 == 0 or n == CAMPAIGN
+
+
+static func is_endless(n: int) -> bool:
+	return n == ENDLESS
 
 
 static func room_count_for(n: int) -> int:
+	if n >= FINALE:
+		return 1
 	if n < 10:
 		return 1
 	if n < 40:
@@ -102,12 +131,94 @@ static func speed_scale(modifier: StringName) -> float:
 ## The one-line description of a level for the level select.
 static func describe(n: int) -> String:
 	var level := get_level(n)
-	var theme: Dictionary = level["theme"]
-	var text: String = theme["name"]
+	var text := name_for(n)
 	var modifier: StringName = level["modifier"]
 	if modifier != &"":
 		text += "  ·  " + String(MODIFIERS[modifier]).get_slice("  ·  ", 0)
 	return text
+
+
+const _ONSETS := ["V", "K", "Z", "TH", "S", "R", "N", "M", "X", "D", "Q", "L", "AZ", "OR", "EL", "KH", "VR", "SOL", "NY", "TR"]
+const _VOWELS := ["A", "E", "I", "O", "U", "AE", "IO", "Y"]
+const _CODAS := ["", "", "N", "X", "R", "TH", "S", "L", "K", "RA", "ON", "IS"]
+const _SUFFIXES := ["", "", "", " PRIME", " MAJORIS", " MINOR", " REACH", " DRIFT", " GATE", " VEIL", " HOLLOW", " SPIRE"]
+static var _names: Array[String] = []
+
+
+## Every star has a name, never a number: 1..99 are built from syllables
+## with a fixed seed (unique, so no two stars share one); the last two are
+## named by hand.
+static func name_for(n: int) -> String:
+	if n == FINALE:
+		return "THE CROWN"
+	if n == ENDLESS:
+		return "THE ABYSS"
+	if _names.is_empty():
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 424242
+		var seen := {}
+		while _names.size() < CAMPAIGN:
+			var word := ""
+			for _s in rng.randi_range(2, 3):
+				word += _ONSETS[rng.randi() % _ONSETS.size()] + _VOWELS[rng.randi() % _VOWELS.size()]
+			word += _CODAS[rng.randi() % _CODAS.size()]
+			if word.length() > 9 or seen.has(word) or not _sounds_right(word):
+				continue
+			seen[word] = true
+			_names.append(word + _SUFFIXES[rng.randi() % _SUFFIXES.size()])
+	return _names[clampi(n, 1, CAMPAIGN) - 1]
+
+
+## No doubled letters and no three vowels in a row: they read as typos.
+static func _sounds_right(word: String) -> bool:
+	var vowels := 0
+	for i in word.length():
+		if i > 0 and word[i] == word[i - 1]:
+			return false
+		vowels = vowels + 1 if "AEIOUY".contains(word[i]) else 0
+		if vowels >= 3:
+			return false
+	return true
+
+
+## Level 100: one vast open room and 25 waves, every one with a boss at
+## full strength. One boss alone, then two at once, then three with heavies.
+## Concurrency stays low enough for a phone; the length is the test.
+static func _finale() -> Dictionary:
+	var waves: Array[Dictionary] = []
+	for w in 25:
+		var bosses := 1 if w < 8 else (2 if w < 17 else 3)
+		var spec := {"b": bosses, "r": 3 + floori(w / 3.0), "s": 2 + floori(w / 5.0), "shield": 1, "support": 1}
+		if w >= 4:
+			spec["h"] = 1 + floori(w / 8.0)
+		spec["cap"] = mini(bosses + 3 + floori(w / 5.0), 9)
+		waves.append(spec)
+	return {"n": FINALE, "rooms": [_open_room(waves)], "boss": true,
+		"theme": theme_for(FINALE), "modifier": &""}
+
+
+## Level 101: one wave to begin; the director writes the rest as it goes.
+static func _endless() -> Dictionary:
+	var waves: Array[Dictionary] = [endless_wave(1)]
+	return {"n": ENDLESS, "rooms": [_open_room(waves)], "boss": false,
+		"theme": theme_for(ENDLESS), "modifier": &"", "endless": true}
+
+
+## Wave w of the endless level: more bodies every wave, a boss every fifth.
+static func endless_wave(w: int) -> Dictionary:
+	var bodies := 6 + w
+	var spec := {"r": maxi(2, floori(bodies / 2.0)), "s": floori(bodies / 4.0), "h": floori(w / 4.0), "cap": clampi(4 + floori(w / 3.0), 4, 10)}
+	if w >= 3:
+		spec["shield"] = 1 + floori(w / 8.0)
+	if w >= 5:
+		spec["support"] = 1 + floori(w / 10.0)
+	if w % 5 == 0:
+		spec["b"] = floori(w / 10.0) + 1
+	return spec
+
+
+static func _open_room(waves: Array[Dictionary]) -> Dictionary:
+	return {"width": 36.0, "length": 64.0, "gates": 8, "layout": &"open", "cover": [], "waves": waves}
 
 
 ## No modifier while the game is teaching; then about two levels in five.
@@ -212,6 +323,13 @@ static func _wave(n: int, rng: RandomNumberGenerator, modifier: StringName) -> D
 		spec["s"] = shooters
 	if heavies > 0:
 		spec["h"] = heavies
+	# Replace existing bodies rather than increasing the wave or concurrency.
+	if n >= 15 and int(spec["r"]) > 2:
+		spec["r"] -= 1
+		spec["shield"] = 1
+	if n >= 25 and int(spec["r"]) > 2:
+		spec["r"] -= 1
+		spec["support"] = 1
 	spec["cap"] = cap
 	return spec
 

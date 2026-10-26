@@ -58,6 +58,13 @@ var juke_idle_rate := 0.08
 ## How hard it keeps its distance from other enemies.
 var separation := 1.0
 
+var hit_origin := Vector3.ZERO
+var affected_left := 0.0
+var shield_disabled := 0.0
+var slow_left := 0.0
+var slow_factor := 1.0
+var burn_lock := 0.0
+var control_lock := 0.0
 var _dead := false
 var _telegraph_left := 0.0
 var _heading := Vector3.FORWARD
@@ -130,6 +137,11 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	affected_left = maxf(0.0, affected_left - delta)
+	shield_disabled = maxf(0.0, shield_disabled - delta)
+	slow_left = maxf(0.0, slow_left - delta)
+	burn_lock = maxf(0.0, burn_lock - delta)
+	control_lock = maxf(0.0, control_lock - delta)
 	if _dead:
 		return
 	if not active:
@@ -172,7 +184,7 @@ func _physics_process(delta: float) -> void:
 		var step := clampf(angle, -turn_rate * delta, turn_rate * delta)
 		_heading = _heading.rotated(Vector3.UP, step).normalized()
 	var moving := move_dir.length() > 0.05 or _detour_left > 0.0
-	var spd := speed * _speed_factor() if moving else 0.0
+	var spd := speed * _speed_factor() * (slow_factor if slow_left > 0.0 else 1.0) if moving else 0.0
 	velocity.x = _heading.x * spd + _juke_vel.x
 	velocity.z = _heading.z * spd + _juke_vel.z
 	move_and_slide()
@@ -202,7 +214,9 @@ func take_hit(amount: float, shape_idx: int, source: StringName, stagger: float)
 	last_hit_by = source
 	if stagger > 0.0 and _model:
 		_model.action(&"Hit")
-	_stagger_left = maxf(_stagger_left, stagger)
+	if stagger > 0.0 and control_lock <= 0.0:
+		_stagger_left = minf(stagger, 0.15 if kind == &"boss" else 0.6)
+		control_lock = _stagger_left + 0.7
 	_flash_left = 0.06
 	if health <= 0.0:
 		_dead = true
@@ -405,3 +419,17 @@ func _fire_projectile(from: Vector3, at: Vector3, damage: float, proj_speed: flo
 	p.position = from # enemies live under a parent at the world origin
 	get_parent().add_child(p)
 	Audio.play_at(&"shot_" + String(kind), from)
+
+## Control windows have a lockout so repeated grenades cannot stun-lock.
+func apply_emp(duration: float, shield_bonus: float) -> void:
+	affected_left = maxf(affected_left, duration)
+	shield_disabled = maxf(shield_disabled, duration + shield_bonus)
+	if control_lock > 0.0:
+		return
+	if kind == &"boss":
+		slow_left = 1.0
+		slow_factor = 0.7
+		control_lock = 2.0
+	else:
+		_stagger_left = minf(duration, 3.2)
+		control_lock = _stagger_left + 1.0

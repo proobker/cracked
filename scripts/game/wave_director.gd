@@ -26,6 +26,9 @@ var first_delay := Tuning.first_wave_delay
 var boss_scale := 1.0
 ## Enemy speed multiplier, from the level's modifier.
 var speed_scale := 1.0
+## The endless level: clearing the last wave writes the next one, so
+## all_waves_cleared never fires and the run ends only in death.
+var endless := false
 
 var wave := 0
 var state := State.IDLE
@@ -79,6 +82,10 @@ func _begin_wave(n: int) -> void:
 		_queue.append(&"rusher")
 	for i in int(spec.get("s", 0)):
 		_queue.append(&"shooter")
+	for i in int(spec.get("shield", 0)):
+		_queue.append(&"shield")
+	for i in int(spec.get("support", 0)):
+		_queue.append(&"support")
 	_queue.shuffle()
 	# Heavies walk in after the opening bodies, as the wave's punctuation.
 	var heavies := int(spec.get("h", 0))
@@ -96,6 +103,10 @@ func _begin_wave(n: int) -> void:
 
 func _clear_wave() -> void:
 	wave_cleared.emit(wave)
+	if endless and wave >= waves.size():
+		waves.append(Levels.endless_wave(wave + 1))
+		# Its bosses grow with the run instead of starting at full strength.
+		boss_scale = clampf(0.8 + 0.06 * float(wave), 0.8, 3.0)
 	if wave >= waves.size():
 		state = State.DONE
 		all_waves_cleared.emit()
@@ -152,6 +163,10 @@ func _rescue_strays() -> void:
 
 static func make_enemy(kind: StringName) -> Enemy:
 	match kind:
+		&"shield":
+			return ShieldRobot.new()
+		&"support":
+			return SupportRobot.new()
 		&"shooter":
 			return Shooter.new()
 		&"heavy":

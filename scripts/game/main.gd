@@ -8,8 +8,10 @@ enum Mode { RUN, PRACTICE }
 
 ## Set by the menu before loading this scene.
 static var mode := Mode.RUN
-## The level a run plays, 1–99. Set by the level select.
+## The level a run plays. Set by the level select.
 static var level := 1
+## One-shot HUD banner from the menu, e.g. a discarded practice build.
+static var notice := ""
 
 const PRACTICE_DUMMIES := [
 	[&"rusher", Vector3(-5.0, 0.1, 7.0)],
@@ -17,6 +19,12 @@ const PRACTICE_DUMMIES := [
 	[&"heavy", Vector3(8.0, 0.1, -17.0)],
 ]
 
+var _attempt := ProgressionState.uid()
+var _unbanked := 0
+var _rewarded := {}
+var _banked := {}
+var _pending_rewards := {}
+var _pending_complete := false
 var _world: Node3D
 var _enemies: Node3D
 var _player: Player
@@ -42,6 +50,8 @@ func _ready() -> void:
 	add_child(_world)
 	_enemies = Node3D.new()
 	_player = Player.new()
+	_player.build = Progress.snapshot(mode == Mode.PRACTICE)
+	_player.add_to_group("player")
 	_director = WaveDirector.new()
 	_director.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_director.player = _player
@@ -54,6 +64,9 @@ func _ready() -> void:
 		_run.director = _director
 		_world.add_child(_run)
 		_player.position = _run.start_position()
+		if Levels.is_endless(level):
+			_player.regen_scale = 0.1
+			_player.regen_extra_delay = 3.0
 	_world.add_child(_enemies)
 	_world.add_child(_player)
 
@@ -102,12 +115,20 @@ func _ready() -> void:
 		Audio.set_intensity(_level_intensity())
 		var modifier: StringName = _run.level["modifier"]
 		if modifier == &"":
-			_hud.banner("LEVEL %d  ·  %s" % [level, _run.level["theme"]["name"]], 2.5)
+			_hud.banner(Levels.name_for(level), 2.5)
 		else:
-			_hud.banner("LEVEL %d  ·  %s" % [level, String(Levels.MODIFIERS[modifier]).get_slice("  ·  ", 0)], 3.5)
+			_hud.banner("%s  ·  %s" % [Levels.name_for(level), String(Levels.MODIFIERS[modifier]).get_slice("  ·  ", 0)], 3.5)
+		if not notice.is_empty():
+			_hud.notice(notice + "  ·  NORMAL BUILD ACTIVE", 6.0)
+	notice = ""
 
 
 func _process(_delta: float) -> void:
+	# Restore an unexpectedly released cursor only while this game owns focus.
+	# Never fight Alt+Tab or capture over the pause/settings UI.
+	if not get_tree().paused and not _over and get_window().has_focus():
+		_capture_mouse(true)
+	_hud.set_progress(Progress.player_level(), Progress.ledger.coins, _unbanked, _player.grenade_kind, _player.grenades, mode == Mode.PRACTICE)
 	if not _player.dead:
 		_hud.set_spread(_player.weapon.current_spread_deg(), _player.camera.fov)
 	if Input.is_action_just_pressed("pause") and not _over and not _settings.visible:
@@ -128,6 +149,14 @@ func _notification(what: int) -> void:
 		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 			if is_inside_tree() and not _over and not get_tree().paused:
 				_set_paused(true)
+			PlayerInput.release_pointer()
+		NOTIFICATION_APPLICATION_FOCUS_IN, NOTIFICATION_WM_WINDOW_FOCUS_IN:
+			if is_instance_valid(_hud):
+				_capture_mouse(not get_tree().paused and not _over)
+
+
+func _exit_tree() -> void:
+	PlayerInput.release_pointer()
 
 
 func _set_paused(paused: bool) -> void:
@@ -144,17 +173,28 @@ func _set_paused(paused: bool) -> void:
 
 
 func _end_run(title: String, body: String, buttons: Array) -> void:
+	_end_run_quiet()
+	_hud.show_overlay(title, body, buttons)
+
+
+## Ends the run without the HUD overlay, for screens that bring their own.
+func _end_run_quiet() -> void:
 	_over = true
 	get_tree().paused = true
 	_touch.reset()
 	_touch.set_shown(false)
 	_capture_mouse(false)
 	Audio.stop_music()
-	_hud.show_overlay(title, body, buttons)
 
 
 func _on_overlay_action(id: StringName) -> void:
 	match id:
+		&"retry_save":
+			if _flush_rewards():
+				if _pending_complete:
+					_on_level_complete()
+				else:
+					_set_paused(false)
 		&"resume":
 			_set_paused(false)
 		&"settings":
@@ -163,7 +203,12 @@ func _on_overlay_action(id: StringName) -> void:
 		&"restart":
 			_change_scene("res://scenes/main.tscn")
 		&"next":
-			level += 1
+			# Back through the galaxy: the map flies to the next star, then plays it.
+			LevelSelect.travel_from = level
+			level = mini(level + 1, Levels.COUNT)
+			_change_scene("res://scenes/menu.tscn")
+		&"abyss":
+			level = Levels.ENDLESS
 			_change_scene("res://scenes/main.tscn")
 		&"menu":
 			_change_scene("res://scenes/menu.tscn")
@@ -191,30 +236,49 @@ func _on_player_died(cause: String) -> void:
 	Audio.play(&"lose")
 	if mode == Mode.PRACTICE:
 		return
+	if Levels.is_endless(level):
+		var best_before := Progress.endless_wave
+		Progress.record_endless(_director.wave, _score.score)
+		PlayGames.endless_ended(_director.wave)
+		var record := "   ·   new best" if _director.wave > best_before else "   ·   best %d" % Progress.endless_wave
+		_end_run("CONSUMED", "%s   ·   wave %d%s\n%d score   ·   x%d best combo\n%s" % [
+			Levels.name_for(level), _director.wave, record, _score.score, _score.best, cause,
+		], [[&"restart", "AGAIN"], [&"menu", "MENU"]])
+		return
 	var reached := "the boss" if _director.is_boss_wave() else "room %d / %d" % [_run.room_index + 1, _run.room_count()]
-	_end_run("DEAD", "Level %d, %s   ·   %d score   ·   x%d best combo\n%s" % [
-		level, reached, _score.score, _score.best, cause,
+	_end_run("DEAD", "%s, %s   ·   %d score   ·   x%d best combo\n%s" % [
+		Levels.name_for(level), reached, _score.score, _score.best, cause,
 	], [[&"restart", "RETRY"], [&"menu", "MENU"]])
 
 
 func _on_level_complete() -> void:
+	_pending_complete = true
+	if not _flush_rewards():
+		return
 	Audio.play(&"win")
-	var first_clear := level < Levels.COUNT and not Progress.is_unlocked(level + 1)
+	var first_clear := not Progress.clears.has(str(level))
 	var record := _score.score > Progress.best_for(level)
-	Progress.complete(level, _score.score)
+	if not Progress.complete(level, _score.score):
+		_save_error()
+		return
+	_pending_complete = false
 	PlayGames.level_cleared(level, _score.score)
 	var notes: Array[String] = []
 	if record:
 		notes.append("new best")
-	if first_clear:
-		notes.append("level %d unlocked" % (level + 1))
+	if first_clear and level < Levels.COUNT:
+		notes.append("new star charted")
 	var body := "%d score   ·   x%d best combo" % [_score.score, _score.best]
 	if not notes.is_empty():
 		body += "\n" + "   ·   ".join(notes)
-	if level >= Levels.COUNT:
-		_end_run("ALL 99 CLEARED", body, [[&"restart", "REPLAY"], [&"menu", "MENU"]])
+	if level == Levels.FINALE:
+		_end_run_quiet()
+		var screen := Conquered.new()
+		screen.stats = "%d score   ·   x%d best combo" % [_score.score, _score.best]
+		screen.action.connect(_on_overlay_action)
+		_hud.get_parent().add_child(screen)
 	else:
-		_end_run("LEVEL %d CLEARED" % level, body, [[&"next", "NEXT LEVEL"], [&"restart", "REPLAY"], [&"menu", "MENU"]])
+		_end_run("%s CONQUERED" % Levels.name_for(level), body, [[&"next", "NEXT STAR"], [&"restart", "REPLAY"], [&"menu", "MENU"]])
 
 
 func _on_shot_result(result: String) -> void:
@@ -236,8 +300,18 @@ func _on_room_started(index: int, total: int) -> void:
 
 
 func _on_room_cleared(_index: int, _total: int) -> void:
+	var key := _attempt + "/room/" + str(_index)
+	if not _banked.has(key):
+		for node in get_tree().get_nodes_in_group("coin"):
+			(node as CoinPickup).claim()
+		_pending_rewards[key] = {"coins": _unbanked, "xp": 50 + level * 3 + (100 + level * 5 if _index == _total - 1 else 0)}
+		_banked[key] = true
+		_unbanked = 0
+		_player.grenades = mini(_player.grenade_cap, _player.grenades + (1 if not _player.grenade_kind.is_empty() else 0))
+	if not _flush_rewards():
+		return
 	_hud.banner("ROOM CLEARED  ·  DOOR OPEN", 3.0)
-	_hud.set_wave_text("LEVEL %d  ·  MOVE ON" % level)
+	_hud.set_wave_text("%s  ·  MOVE ON" % Levels.name_for(level))
 
 
 func _on_wave_started(wave: int, _total: int) -> void:
@@ -265,17 +339,20 @@ func _on_interval_tick(seconds_left: float) -> void:
 
 
 func _update_wave_text() -> void:
-	var text := "LEVEL %d" % level
+	var text := Levels.name_for(level)
+	if _director.endless:
+		_hud.set_wave_text("%s  ·  WAVE %d" % [text, maxi(_director.wave, 1)])
+		return
 	if _run.room_count() > 1:
 		text += "  ·  ROOM %d / %d" % [_run.room_index + 1, _run.room_count()]
-	if _director.is_boss_wave():
+	if _director.is_boss_wave() and _director.total_waves() == 1:
 		text += "  ·  BOSS"
 	else:
 		text += "  ·  WAVE %d / %d" % [maxi(_director.wave, 1), _director.total_waves()]
 	_hud.set_wave_text(text)
 
 
-## Music rises through the 99 levels and through the rooms of each one.
+## Music rises through the campaign and through the rooms of each level.
 func _level_intensity() -> float:
 	var through_level := float(_run.room_index) / float(maxi(_run.room_count() - 1, 1))
 	return clampf(0.5 * float(level - 1) / float(Levels.COUNT - 1) + 0.5 * through_level, 0.0, 0.95)
@@ -284,12 +361,51 @@ func _level_intensity() -> float:
 ## Score is weighted by enemy and weapon (§8). Ammo drops for the weapon
 ## that made the kill, and sometimes for another (§5).
 func _on_enemy_killed(enemy: Enemy) -> void:
+	if mode == Mode.PRACTICE or _player.dead:
+		return
+	var id := _attempt + "/kill/" + str(enemy.get_instance_id())
+	if _rewarded.has(id):
+		return
+	_rewarded[id] = true
+	_pending_rewards[id] = {"coins": 0, "xp": maxi(10, enemy.points / 5)}
+	var reward := maxi(6, enemy.points / 20) + level / 5
+	_drop_coin(enemy.global_position + Vector3.UP * 0.5, reward)
 	var weapon := _player.weapon_by_kind(enemy.last_hit_by)
-	_score.on_kill(roundi(enemy.points * weapon.score_mult))
+	_score.on_kill(roundi(enemy.points * (weapon.score_mult if weapon else 1.0)))
+	if weapon == null:
+		weapon = _player.weapons.pick_random()
 	_drop_ammo(weapon, enemy.global_position)
 	if randf() < 0.25:
 		var others := _player.weapons.filter(func(w: Weapon) -> bool: return w != weapon)
 		_drop_ammo(others.pick_random(), enemy.global_position + Vector3(0.8, 0.0, 0.0))
+	_flush_rewards()
+
+func _drop_coin(at: Vector3, amount: int) -> void:
+	var existing := get_tree().get_nodes_in_group("coin")
+	for node in existing:
+		var coin := node as CoinPickup
+		if not coin.claimed and (coin.position.distance_to(at) < 3.0 or existing.size() >= 32):
+			coin.amount += amount
+			return
+	var coin := CoinPickup.new()
+	coin.position = at
+	coin.amount = amount
+	coin.player = _player
+	coin.collected.connect(func(value: int) -> void: _unbanked += value)
+	_world.add_child(coin)
+
+func _flush_rewards() -> bool:
+	for id: String in _pending_rewards.keys():
+		var reward: Dictionary = _pending_rewards[id]
+		if not Progress.award(id, reward.coins, reward.xp):
+			_save_error()
+			return false
+		_pending_rewards.erase(id)
+	return true
+
+func _save_error() -> void:
+	_set_paused(true)
+	_hud.show_overlay("SAVE NEEDS ATTENTION", Progress.last_error, [[&"retry_save", "RETRY SAVE"]])
 
 
 func _drop_ammo(weapon: Weapon, at: Vector3) -> void:
@@ -314,6 +430,7 @@ func _start_practice() -> void:
 	refill.wait_time = 1.0
 	refill.autostart = true
 	refill.timeout.connect(func() -> void:
+		_player.grenades = _player.grenade_cap
 		for w in _player.weapons:
 			if w.reserve < w.reserve_max:
 				w.add_ammo(w.reserve_max))
@@ -331,8 +448,6 @@ func _spawn_dummy(kind: StringName, at: Vector3) -> void:
 	_enemies.add_child(dummy)
 
 
-## Mouse capture is for testing on desktop; phones have no pointer.
+## Platform, not touchscreen capability, decides desktop pointer behavior.
 func _capture_mouse(capture: bool) -> void:
-	if DisplayServer.is_touchscreen_available():
-		return
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if capture else Input.MOUSE_MODE_VISIBLE
+	PlayerInput.set_mouse_capture(capture)

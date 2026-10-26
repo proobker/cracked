@@ -9,6 +9,8 @@ var direction := Vector3.FORWARD
 var color := Color.WHITE
 var source := "an enemy"
 var _life := 4.0
+var _near_checked := false
+var _spent := false
 
 
 func _ready() -> void:
@@ -38,13 +40,31 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	global_position += direction * speed * delta
+	if _spent:
+		return
+	var end := global_position + direction * speed * delta
+	var ray := PhysicsRayQueryParameters3D.create(global_position, end, 1 | 2)
+	var hit := get_world_3d().direct_space_state.intersect_ray(ray)
+	if not hit.is_empty():
+		_on_body_entered(hit.collider)
+		return
+	if not _near_checked:
+		for node in get_tree().get_nodes_in_group("player"):
+			var p := node as Player
+			var closest := Geometry3D.get_closest_point_to_segment(p.global_position + Vector3.UP * 1.2, global_position, end)
+			if closest.distance_to(p.global_position + Vector3.UP * 1.2) < 1.4 and p.is_dashing():
+				p.near_miss()
+				_near_checked = true
+	global_position = end
 	_life -= delta
 	if _life <= 0.0:
 		queue_free()
 
 
 func _on_body_entered(body: Node3D) -> void:
+	if _spent:
+		return
+	_spent = true
 	if body is Player:
 		(body as Player).take_damage(damage, source)
 	queue_free()

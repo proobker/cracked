@@ -34,6 +34,8 @@ func _ready() -> void:
 	_button("crouch", JOY_BUTTON_B)
 	_key("dash", KEY_Q)
 	_button("dash", JOY_BUTTON_RIGHT_SHOULDER)
+	_key("grenade", KEY_G)
+	_button("grenade", JOY_BUTTON_LEFT_SHOULDER)
 	_key("reload", KEY_R)
 	_button("reload", JOY_BUTTON_X)
 	_mouse("fire", MOUSE_BUTTON_LEFT)
@@ -85,12 +87,31 @@ func release(action: StringName) -> void:
 func clear_touch() -> void:
 	touch_move = Vector2.ZERO
 	touch_sprint = false
+	_look_accum = Vector2.ZERO
+
+
+## Desktop touch capability does not imply the absence of a mouse.
+## Captured is relative FPS aiming; confined is a visible menu cursor.
+func set_mouse_capture(capture: bool) -> void:
+	if OS.has_feature("mobile"):
+		return
+	var target := Input.MOUSE_MODE_CAPTURED if capture else Input.MOUSE_MODE_CONFINED
+	if Input.mouse_mode != target:
+		_look_accum = Vector2.ZERO
+		Input.mouse_mode = target
+
+
+func release_pointer() -> void:
+	_look_accum = Vector2.ZERO
+	for action in ["fire", "scope", "grenade", "swap"]:
+		Input.action_release(action)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	var motion := event as InputEventMouseMotion
-	if motion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		_look_accum += motion.relative * Tuning.mouse_sens_deg_per_px
+	if motion and not get_tree().paused and motion.device != InputEvent.DEVICE_ID_EMULATION and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		_look_accum += motion.screen_relative * Tuning.mouse_sens_deg_per_px
 
 
 func _ensure(action: StringName) -> void:
@@ -105,12 +126,11 @@ func _key(action: StringName, keycode: Key) -> void:
 	InputMap.action_add_event(action, ev)
 
 
-## Mouse bindings exist for editor testing only. On a touchscreen, touches
-## are also emulated as mouse clicks (so menus work), and a touch must never
-## fire the gun.
+## Desktop bindings remain available on touch-capable laptops. Mobile uses
+## touch actions; its menu-emulated mouse clicks must not fire the gun.
 func _mouse(action: StringName, button: MouseButton) -> void:
 	_ensure(action)
-	if DisplayServer.is_touchscreen_available():
+	if OS.has_feature("mobile"):
 		return
 	var ev := InputEventMouseButton.new()
 	ev.button_index = button

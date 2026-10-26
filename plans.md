@@ -2,13 +2,21 @@
 
 > **A 3d FPS.** A neon-lit death run, ninety-nine levels deep.
 >
-> **Status:** v1 built (1.0.0, debug-signed APK). v2 in progress: rooms
-> and levels, robot models, Play Games sign-in.
+> **Status (2026-10-22):** v1 is built and publication is underway. Play
+> Console lists 1.0.1 (code 2) as Active; its release track is unspecified.
+> See [release history](release.md) for verified version records.
+>
+> **Arsenal & Skills (2026-10-23):** implemented in the working tree, unreleased. Read §16 for the
+> authoritative expansion design and the [implementation handoff](docs/expansion-implementation.md)
+> before implementing progression, weapons, grenades, or new enemies.
+> Older “v2” references below identify the rooms-and-levels design iteration,
+> not an Android 2.0 release. Sections 1–10 describe the existing baseline
+> except where superseded by §16, which defines the implemented expansion.
 >
 > **Structure changed 2026-10-12:** one plaza and twenty waves → 99
 > levels of rectangular rooms, enemies only through the far wall. Robot
 > models replace the capsule placeholders, and Google Play Games sign-in
-> comes in, switched off until configured. §1, §2, §3, §7, §11, §12 and
+> was introduced behind configuration; the current repository enables it. §1, §2, §3, §7, §11, §12 and
 > §15 were revised in the same change. The old text's reasoning is kept
 > where it still holds, and each reversal says why it was reversed.
 >
@@ -57,10 +65,10 @@ that is the point — see §12.
 
 ### The pitch
 
-You are dropped onto a rooftop plaza in a city that wants you dead. Waves of
-things come at you. You have five ways to move and three guns, and the only
-thing that matters is how long you last and how big a number you can put on
-the screen while you do it.
+Fight through ninety-nine levels of neon-lit rooms. Read the incoming wave,
+move fast, switch guns, and protect your combo. The expansion adds
+lasting player progression: earn XP, bank enemy coins after each room, and
+build a specialized loadout before the next attempt.
 
 ### What kind of game this is, precisely
 
@@ -105,7 +113,7 @@ aiming is coarser than a mouse and a game built on precision would be
 broken rather than hard.
 
 **Why Android.** The game lives where it is actually played: on the phone,
-in a break, in landscape, one run at a time. The 8–15 minute session (§2)
+in a break, in landscape, one run at a time. The short level session (§2)
 was always phone-shaped. Godot 4 because it is free, exports to Android
 directly, produces small builds, and its Mobile renderer handles low-poly
 neon without asking much of a mid-range phone.
@@ -114,27 +122,17 @@ neon without asking much of a mid-range phone.
 "link in a group chat" is gone. Instead there is a signing keystore, an
 export pipeline, an APK to sideload, and a lifecycle (calls, notifications,
 backgrounding) the game must survive (§13). Mouselook is gone too, and §4
-says what replaces it. v1 is still a reachable line: a signed APK that
-installs and runs is the finish line, and the Play Store is not (§12).
+says what replaces it. The playable build exists; publication is now underway. Expansion work remains
+independent of store approval (§11).
 
 ---
 
 ## 2. Core Loop
 
-```
-        ┌──────────────────────────────────────────┐
-        │                                          │
-        ▼                                          │
-   ┌─────────┐   cleared    ┌──────────┐   die     │
-   │  WAVE   │─────────────▶│ INTERVAL │──────────▶ GAME OVER
-   │  N  /20 │              │   10s    │           (instant retry)
-   └─────────┘              └──────────┘                │
-         ▲                          │                    │
-         │      cleared             │    loot ammo       │
-         │      the wave            └────────────────────┘
-        │
-        ▼
-   wave 20 cleared ──▶ BOSS ──▶ WIN
+```text
+Select level and loadout -> enter room -> clear its waves -> next room
+                                |                              |
+                                +-- death -> retry level       +-- final room -> level clear
 ```
 
 The loop, in one line: **clear a wave, spend a breather, face something
@@ -390,7 +388,7 @@ open question (§14), not a v1 feature.
 
 ## 5. Weapons
 
-Three guns, three ranges, three reasons to swap mid-fight. If there is never
+The existing baseline has three guns, three ranges, three reasons to swap mid-fight. If there is never
 a reason to switch, there should only be one gun.
 
 | | **Rifle** | **Shotgun** | **Marksman** |
@@ -482,7 +480,7 @@ lost, but the loss is always traceable to a decision the player made.
 
 ## 6. Enemies
 
-Three types, one per role. Each teaches a different lesson by existing.
+The baseline has three types, one per role. Each teaches a different lesson by existing. Shield and support robots are specified in §16.
 
 | | **Rusher** | **Shooter** | **Heavy** |
 |---|---|---|---|
@@ -590,31 +588,14 @@ is where that promise is easiest to keep.
 
 ### The boss
 
-**Design intent, not a finished design.** It should be recognisably from
-this game, not a boss archetype pasted in.
+The baseline boss is a large, durable enemy with ranged pressure, fought in the
+last room of every tenth level and level 99. Later encounters scale its health
+and add the existing escort. Its purpose is to change movement and target
+priorities rather than merely demand more shots.
 
-- It is a **single entity**, not a swarm, so the wave is a fight rather
-  than a survival test you have already done 19 times.
-- It should **change the fight, not just the numbers** — a ranged boss
-  means standing still finally costs you, a boss that summons turns wave 20
-  into a hybrid of 20 and the last five waves.
-- It should be **winnable in about a minute**, on the same weapons, with
-  the same three to five mistakes allowed as the rest of the game.
-
-**The floor, so that wave 20 can never be what blocks v1.** The boss is
-the least designed thing in this document and the most likely to overrun a
-six-to-ten-hour-a-week budget. So it has a stated minimum, and the minimum
-is v1:
-
-> A single large enemy. It advances slowly, soaks damage like a heavy, and
-> adds exactly one new thing — a ranged attack. It needs no new AI, no new
-> navigation, and no system that does not already exist on the plaza.
-
-That floor satisfies every bullet above. The fight-changing behaviour and
-the summon variant are stretch stacked on top of a floor that already
-works, and the floor gets built first. A plain boss that works is a far
-better outcome than an ambitious one that delays the whole project, and
-both are better than a v1 that ships nineteen waves.
+Preserve a readable attack tell and starter-weapon viability. The expansion
+adds control resistance for EMP/stagger/slow effects; it does not require
+another boss archetype. Additional boss variants remain deferred.
 
 ---
 
@@ -780,7 +761,7 @@ are cut for a reason: each one asks for screen attention that combat needs.
 | **Weak-point marker**, higher again | You found the heavy's weak point |
 | **Kill marker**, highest and loudest | You finished them |
 | **Enemy sounds, distinct per type** | Rusher, shooter, and heavy must be separable by ear alone |
-| **Synth-wave track, intensifying with wave number** | Escalation you feel before you read the counter |
+| **Synth-wave track, intensifying through levels and rooms** | Escalation you feel before you read the counter |
 | **Wave start sting** | A beat to reset and reposition |
 
 ### Governing principle
@@ -790,99 +771,40 @@ those states are indistinguishable, the shooting feels unresponsive and the
 game feels broken, regardless of how it looks. This is non-negotiable, and
 it is three separate sounds rather than two — see §9.
 
-No announcer voice. No dialogue. The music gains intensity with the wave
-number and nothing else changes mid-fight.
+No announcer voice. No dialogue. The music gains intensity through levels and rooms; bosses use their own track.
 
 ---
 
-## 11. Scope Tiers
+## 11. Current Scope and Delivery
 
-### v1 — the finish line
+### Existing baseline
 
-This is the definition of done. If nothing else ever gets built, this is a
-complete game.
+The current repository contains 99 generated levels, room gates and cover,
+boss rooms, robot models, three guns, movement and regen, combo scoring,
+touch/gamepad controls, practice, settings, level select, local progress,
+and Play Games integration. Publication is underway; see [release.md](release.md).
+The earlier plaza/twenty-wave prototype is historical, not the current loop.
 
-- A signed Android APK that installs on a mid-range phone and holds §14's
-  frame floor
-- Touch controls per §4, with gamepad as an alternative, and light aim
-  assist
-- Settings: look sensitivity, FOV, aim assist strength, control size and
-  opacity, volume
-- Pause on backgrounding, and resume to a paused run (§13)
-- One map: walled rooftop plaza, cyberpunk skyline backdrop
-- Movement: sprint, jump, crouch, slide, dash — with dash invulnerability
-- Three weapons: rifle, shotgun, marksman, with real magazines, instant
-  swap past a dry gun (§5)
-- Three enemy types: rusher, shooter, heavy
-- Heavy weak point, with its own hitmarker
-- Twenty waves in four phases, then a boss built to §7's floor
-- Spawning per §2: enemy budget, concurrent cap, distance-gated points,
-  telegraphed
-- Ten-second intermissions with ammo drops
-- Health with ~5s regen, instant death, instant restart
-- Score with the stepped combo bleed and full reset from §8
-- HUD: crosshair with hit, weak-point, and kill markers; health, ammo,
-  wave counter, combo, score; no minimap (§9's test cut it)
-- Death screen naming the cause of death
-- A practice range, so three weapons can be learned without a 10-minute
-  run in the way
-- Audio per §10, including the hit/weak-point/kill/miss distinction
-- Menu, win screen, lose screen, restart
+### Expansion delivery
 
-Nothing else. Not one more feature.
+The expansion is defined in §16. All three implementation groups are present;
+Android device checks and release preparation remain:
 
-### v2 — rooms and levels (2026-10-12)
+1. XP, room-banked coins, save migration, Armory, complete tree UI and Runner
+   effects; SMG, burst rifle, frag.
+2. Gunner and Demolition effects; LMG, plasma launcher, EMP, shield robot.
+3. Railgun, arc gun, incendiary, support robot; full build and economy tuning.
 
-What changed after v1, by decision rather than by drift:
+During staged delivery, unfinished nodes are visibly upcoming and cannot be
+purchased. Activate cross-links only when their destination effects ship.
+Existing publication work is independent of these milestones. Milestones
+are scope groups, not promises of specific version names or dates.
 
-- 99 generated levels of rectangular rooms, enemies only through the far
-  wall (§3, §7). The plaza remains as the menu and the practice range
-- A level select, with progress (the highest open level and the best score
-  per level) saved on the phone
-- Animated robot models in place of the capsules, CC0, with the hitboxes,
-  the weak point and every number unchanged (§6)
-- Google Play Games sign-in, with progress kept in the cloud. It is built
-  in but switched off until the Play Console is set up, and the game
-  never needs it
+### Deferred
 
-**Two items on this list are new since the design was first drafted**, and
-they are here because the friction they remove is not a nice-to-have:
-
-- **The practice range.** A run is 8–15 minutes, every attempt restarts at
-  wave 1, and there are three weapons with genuinely different handling
-  and different failure costs. Without somewhere to learn them, the only
-  way to learn a gun is to spend ten minutes getting to a wave that needs
-  it. That is a real tax on the one promise §1 makes — open the app,
-  start shooting. A range, or a "start at wave N", is a few lines next to
-  systems that already exist.
-- **Cause of death on the death screen.** See §8. The whole meta-game of
-  v1 is retrying, and a retry is only informed if the player is told what
-  they did wrong.
-
-### Stretch — after v1 exists and is fun
-
-In rough priority order:
-
-1. **A difficulty setting.** The one stretch item that is arguably v1, held
-   back only because a lone developer testing their own game cannot judge
-   whether it is fair, and shipping one honest difficulty beats shipping a
-   slider that hides the question.
-2. **Weapon unlocks between runs.** A reward for reaching further.
-3. ~~**A second map.**~~ Done differently in v2: generated rooms.
-4. **A fourth enemy type.**
-5. ~~**Persisted high scores.**~~ Done in v2: best score per level.
-6. **Enemies that strafe or take cover.** The aggressive-AI problem.
-7. **Gyro aim.** Fine aim by tilting the phone, on top of drag-look.
-8. **A Play Store release.** Listing, content rating, store policies.
-
-### Future
-
-Explicitly out of reach for now, listed so it is not re-proposed as if it
-were new: multiplayer, weapon upgrades and attachments, skill trees,
-cutscenes and story, vehicles, slow-motion, melee, a progression-based
-economy, iOS, and a desktop or browser build. (Multiple maps as a campaign
-came in with v2's levels. Online leaderboards have hooks in place, which
-do nothing until IDs exist.)
+Difficulty settings and gyro aim remain possible later work. Attachments,
+multiplayer, authored campaigns, story, vehicles, melee, slow-motion,
+additional platforms, and monetization remain outside this expansion.
 
 ---
 
@@ -895,13 +817,13 @@ Every item here sounds good. That is precisely why it is written down.
 | **Multiplayer** | Doubles the design work and adds a second game to keep balanced |
 | **Hand-built levels** | 99 authored levels is a different project. Levels are generated from one room design (§3) |
 | **More than 3 weapons or 3 enemy types in v1** | Breadth over depth. Depth is what makes it feel good |
-| **Weapon upgrades / attachments** | A second economy to balance, for no gain in the core loop |
-| **Skill trees** | Progression belongs in the run, not in a menu |
-| **Unlocks between runs** | Same. Also risks a player grinding instead of playing |
-| **Cutscenes / story** | An arena shooter with twenty waves does not need a plot |
+| **Weapon upgrades / attachments** | Coins fund skills only; guns unlock through campaign clears |
+| **Unbounded skill power** | §16 now permits a branching tree; active slots and one capstone preserve build choices |
+| **Mandatory grinding** | §16 permits XP, coins and unlocks; baseline encounters must remain beatable with the starter arsenal and no skills |
+| **Cutscenes / story** | Room-clearing combat remains the focus |
 | **Gyro aim in v1** | A second aiming system to tune. Stretch, after drag-look is right |
 | **Ads / in-app purchases** | They pull the game toward session-padding and grinding, which §2 and §11 reject |
-| **A Play Store release that blocks work** | Play Games sign-in is built in v2, but off until configured. The game must always run, and be finished, without it |
+| **Publication blocking expansion work** | Publication is underway; gameplay and offline progression remain independent of sign-in and store approval |
 | **Aim assist that aims for you** | Snap, lock-on, or tracking. Slowdown only — see §4 |
 | **iOS / browser / desktop builds** | One platform, done well. The same reasoning as one map |
 | **Difficulty slider at launch** | See stretch item 1. One honest difficulty first |
@@ -964,38 +886,34 @@ Recorded so they are decisions rather than surprises.
 10. **Thumbs cover the screen.** Enemies that come in under the controls are
     hard to see. This is the touch version of risk 6, and it is answered
     the same way: decided with the layout, not patched in afterwards.
-11. **Twenty waves is a guess.** It may be too short or too long. The
-    escalation curve is a starting shape, and wave length should be tuned
-    by playing, not by keeping a number.
-12. **The boss is undesigned.** §7 gives it a floor, and the floor is
-    buildable. What is not buildable on a six-to-ten-hour-a-week budget is
-    the ambition above it — and treating the ambition as the requirement is
-    how wave 20 ends up delaying the entire project.
+11. **Progression can turn into mandatory grinding.** Validate skill-free
+    starter loadouts throughout the campaign, then measure the upgrade curve.
+12. **Persistent rewards can duplicate.** Room banking, first clears, migration,
+    and cloud conflicts need idempotent accounting, not maximum coin balances.
+13. **Effects compete for a phone's frame budget.** Bound chain targets, active
+    fields, coin stacks, particles, and simultaneous control effects.
+14. **The tree can become unreadable.** Show prerequisite paths, tier locks,
+    active slots and next-rank effects; test it on a real landscape phone.
 
 ---
 
-## 14. Open Questions
+## 14. Tuning and Validation Still Required
 
-Undecided, in no particular order:
+These are measured implementation tasks, not permission to change §16's rules:
 
-- Exact wave counts per phase, and the length of an individual wave
-- Arena dimensions and layout — the minimap decision depends on this, and
-  so does the slide geometry, so §3 cannot be finalised without §4
-- The boss above its §7 floor, if there is ever time for it
-- The grace window's length and the size of a combo step (§8)
-- Dash invulnerability's duration, and the cooldown that gates it (§4)
-- The concurrent enemy cap, which the frame budget will end up deciding
-- ~~Whether the music changes at the boss~~ — decided: it changes, to its
-  own track. Waves 1–19 intensify one track by opening a filter.
-- Menu, and anything adjustable beyond §11's settings list (invert,
-  left-handed layout, button repositioning)
-- Aim assist strength by default, and whether it differs per weapon (§4)
-- Whether to offer an "auto-fire when on target" touch mode (§4)
-- Which real phone is the mid-range test device. The targets themselves are
-  decided: **60 fps target, 30 fps floor** through a whole run, Godot's
-  Mobile renderer, landscape only, minimum Android version per Godot's
-  export defaults
-- Difficulty, until the game is beatable and can be honestly judged
+- XP thresholds to player level 30, per-enemy XP/coin rewards, clear bonuses,
+  and increasing node/rank prices. Target the first foundation purchase after
+  the first cleared room.
+- Exact skill percentages, durations, cooldowns, grenade radii/fuses, new gun
+  damage/ammo curves, and shield/support composition weights.
+- A named mid-range Android test device. Retain a 60 fps target and 30 fps
+  floor through a sustained session, not just a short editor run.
+- Readability and comfort of the tree and grenade controls on touch.
+- Save-journal size under long play; compact only after merge safety is proven.
+
+Record chosen values and measured results in the implementation handoff as
+each milestone ships. Store approval, release track, and rollout details
+belong in [release.md](release.md), not inferred from local configuration.
 
 ---
 
@@ -1023,4 +941,179 @@ Undecided, in no particular order:
   feedback channel
 - **The floor** — the minimum buildable version of a thing, so that one
   undesigned element cannot block everything behind it (§7)
-- **The finish line** — v1 in §11
+- **The finish line** — the current playable baseline in §11
+
+---
+
+## 16. Arsenal & Skills — Expansion
+
+**Implemented in the working tree on 2026-10-23; not published.** This section supersedes the old bans on
+skill trees and between-run unlocks. Player progression adds lasting choices
+without changing the far-wall room structure or requiring purchases.
+Implementation contracts, test results and remaining device checks are in
+[the handoff](docs/expansion-implementation.md); folder READMEs explain current code.
+
+### Three forms of progression
+
+- **Campaign level:** one of the existing 99 encounters. First clears unlock guns.
+- **Player level:** persistent XP progression, capped at 30 initially. Kills,
+  room clears and level clears grant XP; first-time level clears grant a bonus.
+  XP survives death, including XP earned in an uncleared room.
+- **Coins:** enemies drop collectible coins; these purchase permanent skill
+  ranks. Rewards scale by enemy class and campaign difficulty, never combo.
+
+Collected coins are unbanked until the room clears. On clear, collect remaining
+room coin drops and bank all that room's earnings exactly once, including the
+final room. Death, restart or abandonment loses only the current room's unbanked
+coins. A replay is a new attempt with fresh rewards. Practice grants none.
+Pausing/backgrounding does not abandon the attempt; process termination loses
+unbanked coins but preserves committed XP and banked rewards.
+
+Use generous pickup attraction and merged coin stacks for readability and
+performance. Show banked and unbanked amounts distinctly. First-time clears also
+grant a coin bonus, committed with the final-room bank. Target enough earnings
+to purchase the first foundation rank after the first cleared room. No premium
+currency, upgrade failures, loot boxes, or repeat-clear penalties.
+
+### Tree structure: 405 nodes, increasing choices
+
+Campaign reveals nodes only when their level and purchased-parent requirements
+are satisfied; affordability must never hide them. Practice exposes the full
+catalog. This supersedes the earlier always-visible locked-node overview.
+
+**Visual revision (implemented 2026-10-23):** [checklist](docs/visual-progression-plan.md)
+requires a 99-cell DEAD level map, distinct icons/names for every effect type,
+and a visible practice-build fallback when entering campaign. Preserve graph IDs.
+
+The 39 major nodes retain their original stable purchase IDs. Three
+specializations each contain one foundation, two paths of three core
+nodes, two advanced alternatives per path, and one capstone per path: thirteen
+nodes per specialization. Non-capstone nodes normally have three ranks;
+capstones and the extra-grenade-capacity exception have one. Coins purchase
+ranks permanently. Each of the six paths now adds six ten-node circuits
+and one bridge: 39 + (6 × 61) = **405 distinct purchasable nodes**.
+Circuits split into two lanes, rejoin through alternative prerequisites,
+and fan outward as player-level gates rise through 5/10/15/20/25.
+Bridges connect neighboring disciplines through alternative parent routes.
+These are repeated small stat investments, not 405 distinct combat mechanics.
+Each circuit node grants 0.25 rank-equivalent of its specified effect; bridges
+grant 0.5 foundation rank-equivalent. Combined ordinary effects cap at three
+ranks, capacity at one, and capstones at one. Small-node cost is tier × 5;
+major-node rank cost remains tier × 20 × rank. Existing purchases stay valid.
+
+| Specialization | Foundation | Path and core nodes, in prerequisite order | Advanced fork | Capstone |
+|---|---|---|---|---|
+| Runner | Faster weapon swaps | Momentum: moving accuracy → slide distance → moving reload | Sprint recovery OR slide damage resistance | Sliding primes the next shot to stagger an ordinary enemy |
+| Runner | Same foundation | Evasion: dash cooldown → air control → post-dash handling | Post-dash reload OR brief post-dash damage resistance | Narrowly avoiding an attack grants a brief movement boost |
+| Gunner | Recoil recovery | Precision: scoped handling → first-shot recovery → weak-point damage | Scope transition speed OR weak-point stagger | Weak-point kills transfer ammunition from reserve to magazine |
+| Gunner | Same foundation | Suppression: bloom control → reserve capacity → sustained-fire handling | Reload speed OR sustained-hit stagger | Sustained hits on one target grant a brief handling bonus |
+| Demolition | Throw recovery | Ordnance: blast radius → self-blast resistance → explosive stagger | One extra grenade capacity OR faster plasma reload | Grenade kills grant a brief, non-stacking gun-reload boost |
+| Demolition | Same foundation | Disruption: EMP duration → incendiary duration → grenade placement handling | Shield disruption OR incendiary slowdown | Guns briefly deal more damage to enemies affected by your grenades |
+
+- Foundations open at player level 1, all core nodes at 5, advanced nodes at
+  15, capstones at 25. Buying a node requires a purchased parent rank and the
+  player-level gate. Rank prices increase with tier and rank.
+- Each core path is a chain; both advanced alternatives branch from its third
+  core node; either advanced node leads to that path's capstone. Both sides
+  may be purchased and equipped if slots allow.
+- Cross-links add hybrid routes: Momentum's third core node also parents both
+  Suppression advanced nodes; Precision's third core node also parents both
+  Disruption advanced nodes. These are alternative prerequisites, not extra
+  requirements, and do not bypass level gates.
+- Start with four active-node slots; expand to eight at level 5, fourteen at
+  level 15 and twenty-four at level 25. Each node costs one slot regardless of rank; foundations and
+  capstones count. Only one capstone may be active.
+- An active node needs a connected active prerequisite path to a foundation.
+  Deactivating a prerequisite removes dependents unless another active route
+  supports them. Purchased ranks remain owned.
+- Freely change active nodes between attempts; purchases are permanent, with
+  no reset fee or refund system. The earlier twelve-point/free-refund proposal
+  is superseded by permanent purchases and free activation.
+- Builds are immutable during an attempt. Skill effects never extend dash
+  invulnerability, create ammunition, or modify score multipliers.
+- The extra-grenade-capacity node is a **single-rank exception**, granting +1
+  capacity. Other major non-capstone nodes have three ranks; capstones and
+  the 366 added circuit/bridge nodes have one.
+
+Use a single connected, icon-only canvas inspired by the supplied BYTEPATH
+reference, with dim locked routes, brighter owned routes, white active markers
+and ringed capstones. Drag to pan, wheel/pinch or buttons to zoom, FIT to see
+all nodes, and branch shortcuts to focus foundations. Hover explains nodes;
+click/tap keeps details, costs, ranks and requirements in the inspection panel.
+Purchases require the explicit upgrade button. Keyboard arrows navigate,
+Enter inspects, +/- zoom, and F fits. See [research](docs/skill-tree-research.md).
+Armory is accessible from the menu and level select. Unavailable staged content
+is marked upcoming and cannot be bought or activated.
+
+### Loadouts and new guns
+
+Carry three distinct selected guns, with per-gun magazines and reserves, plus
+one selected grenade type. Keep rifle, shotgun and marksman unlocked from the
+start. Choose in the Armory before a level; retries reset combat supplies.
+Guns unlock on campaign clears and never cost coins.
+
+| New gun | Clear level | Role and cost |
+|---|---:|---|
+| SMG | 3 | Mobile close-range spray; weak range, high ammo consumption |
+| Burst rifle | 8 | Controlled medium-range bursts; firing gap after misses |
+| LMG | 15 | Sustained fire; long reload, poor accuracy while moving |
+| Plasma launcher | 25 | Slow explosive projectiles; scarce ammo, self-damage |
+| Railgun | 35 | Charged penetrating precision; slow recovery, expensive misses |
+| Arc gun | 45 | Short-range chains; weak against isolated targets |
+
+Railgun shots penetrate enemies, not walls. Arc chains have a fixed target cap,
+require visibility between hops, and cannot revisit a target. The marksman
+remains the immediate-fire precision choice. Every gun needs distinct feel,
+silhouette, audio and a meaningful reason to select it.
+
+Gun ammo drops serve carried weapons. Grenade/effect kills must have explicit
+attribution rather than pretending to be rifle kills. Neither grenade charges
+nor free magazine ammunition are generated by kills.
+
+### Grenades and controls
+
+| Type | Clear level | Behavior |
+|---|---:|---|
+| Frag | 1 | Bouncing timed explosive with radial damage falloff |
+| EMP | 10 | Brief robot disable and shield disruption; boss slowdown instead of stun |
+| Incendiary | 20 | Short-lived burning area; overlapping fields do not multiply damage |
+
+Start an attempt with two charges. Clearing each room restores one, up to two
+normally or three with the capacity skill. The skill raises the cap, not the
+starting count. Frag/plasma blasts and incendiary fields can hurt the player;
+cover blocks blast damage. Pause freezes all projectiles, fuses and fields.
+
+Touch: tap the grenade button for a quick throw; hold for trajectory preview,
+release to throw, drag outside to cancel. Gamepad: left bumper. Keyboard: G.
+No cooking. Cancelling spends no charge. Movement and aiming remain available
+while previewing; suppress firing during the actual throw animation.
+
+### New enemies
+
+- **Shield robot**, from campaign level 15: frontal protection with an exposed
+  rear/weak point; EMP temporarily disables the shield. Starter guns can win.
+- **Support robot**, from level 25: visibly repairs one nearby ally; never
+  itself, another support robot or a boss. Breaking visibility interrupts it.
+
+Both enter through far-wall gates and replace entries within existing wave
+budgets/caps. Neither requires a specific loadout. Boss control resistance and
+bounded effect stacking prevent stun locks. Skills and unlocks make builds
+different; baseline campaign success must not require grinding.
+
+### Existing players, scores and acceptance
+
+Preserve existing progress. Infer cleared levels from saved best-score keys and
+the sequential levels below the highest unlocked level; level 99 requires its
+own recorded clear. Grant a one-time catch-up award equivalent to the new
+first-clear XP/coin bonuses, not fabricated historical kill rewards. Derive
+weapon unlocks from these clears.
+
+Keep legacy scores separate. Expansion scores use a separate leaderboard;
+retain them locally if its ID is not configured. Cloud economy merges require
+deduplicated earning/purchase records and validated spending, not max balances.
+
+Each milestone must verify room/final-room banking, replay and death behavior,
+duplicate events, migration, offline cloud conflicts, tree paths and slot
+limits, every delivered effect, all damage-source kills, touch cancellation,
+background pause, starter-loadout viability and sustained phone performance.
+See the handoff for concrete cases and current integration hazards.

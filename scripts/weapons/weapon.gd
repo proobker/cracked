@@ -60,6 +60,11 @@ var tracer_pellets := 1
 ## The barrel's end in the model's own coordinates; set by _build_model().
 var muzzle := Vector3(0.0, 0.0, -0.6)
 
+var wielder: Player
+var effects := {}
+var sound_kind: StringName = &""
+var sound_pitch := 1.0
+var shot_stagger := 0.0
 var camera: Camera3D
 ## Where tracers and impacts go: the world, so they pause with it.
 var fx_parent: Node3D
@@ -94,6 +99,10 @@ const RANK := {"miss": 0, "hit": 1, "weak": 2, "kill": 3}
 
 
 func _ready() -> void:
+	reserve_max = roundi(reserve_max * (1.0 + 0.2 * skill("reserves")))
+	recoil_recover *= 1.0 + 0.2 * skill("recoil_recovery")
+	bloom_decay *= 1.0 + 0.2 * skill("first_shot")
+	bloom_per_shot *= 1.0 - 0.12 * skill("bloom_control")
 	mag = mag_size
 	reserve = reserve_start
 	_model = _build_model()
@@ -124,7 +133,7 @@ func tick(delta: float, trigger: bool, reload_pressed: bool, crouched: bool) -> 
 			_shot_index = 0
 	var kicked := Vector2.ZERO
 	if reloading:
-		_reload_left -= delta
+		_reload_left -= delta * reload_multiplier()
 		if _reload_left <= 0.0:
 			_finish_reload()
 	if reload_pressed:
@@ -156,7 +165,17 @@ func current_spread_deg() -> float:
 	elif _crouched:
 		base = spread_crouched_deg
 		bloom *= 0.6
-	var s := base + bloom + move_spread_deg * _move
+	if scoped:
+		base *= 1.0 - 0.15 * skill("scoped_handling")
+	var moving := move_spread_deg * _move * (1.0 - 0.15 * skill("moving_accuracy"))
+	if _trigger_was_down:
+		moving *= 1.0 - 0.12 * skill("sustained_handling")
+	var s := base + bloom + moving
+	if is_instance_valid(wielder):
+		if wielder.dash_bonus > 0.0:
+			s *= 1.0 - 0.12 * skill("dash_handling")
+		if wielder.focus_bonus > 0.0:
+			s *= 0.75
 	if _airborne:
 		s += air_spread_deg
 	return s
@@ -168,7 +187,7 @@ func start_reload() -> void:
 	reloading = true
 	scoped = false
 	_reload_left = reload_time
-	Audio.play(&"reload_" + String(kind))
+	Audio.play(&"reload_" + String(kind if sound_kind == &"" else sound_kind))
 	ammo_changed.emit(self)
 
 
@@ -209,9 +228,27 @@ func _fire() -> Vector2:
 	mag -= 1
 	_cooldown = fire_interval
 	_since_shot = 0.0
-	Audio.play(&"shot_" + String(kind))
+	Audio.play(&"shot_" + String(kind if sound_kind == &"" else sound_kind), 0.04, sound_pitch)
 	ammo_changed.emit(self)
 
+	shot_stagger = wielder.consume_stagger() if is_instance_valid(wielder) else 0.0
+	var best := _shoot()
+	fired.emit(best)
+
+	# Recoil: the first shots climb, then the burst wanders side to side.
+	var yaw := recoil_yaw_deg * (sin(float(_shot_index) * 0.9) * 0.7 + randf_range(-0.5, 0.5))
+	_shot_index += 1
+	_bloom = minf(bloom_max, _bloom + bloom_per_shot)
+	_flash = 1.0
+	_kick_pos = Vector3(0.0, 0.015, 0.05 + 0.03 * kick_deg)
+	_kick_rot = deg_to_rad(4.0 + 3.0 * kick_deg)
+	var multiplier := 1.0 - (0.15 * skill("scoped_handling") if scoped else 0.0)
+	if is_instance_valid(wielder) and wielder.dash_bonus > 0.0:
+		multiplier *= 1.0 - 0.12 * skill("dash_handling")
+	return Vector2(kick_deg, yaw) * multiplier
+
+
+func _shoot() -> String:
 	var spread := deg_to_rad(current_spread_deg())
 	var from := camera.global_position
 	var space := camera.get_world_3d().direct_space_state
@@ -234,9 +271,10 @@ func _fire() -> Vector2:
 			var collider: Object = result["collider"]
 			if collider.has_method("take_hit"):
 				# Stagger lands once per shot, not once per pellet.
-				var stun := 0.0 if staggered.has(collider) else stagger
+				var stun := 0.0 if staggered.has(collider) else maxf(stagger, shot_stagger)
 				staggered[collider] = true
-				res = collider.take_hit(_damage_at(from.distance_to(end)), result["shape"], kind, stun)
+				if collider is Enemy:
+					res = Combat.hit(collider, _damage_at(from.distance_to(end)), result["shape"], kind, from, wielder, effects, stun)
 				if res != "none" and fx_parent:
 					var c: Color = (collider as Enemy).color if collider is Enemy else color
 					ShotFx.impact(fx_parent, end, -dir, c, res == "kill")
@@ -246,16 +284,23 @@ func _fire() -> Vector2:
 			best = res
 		if fx_parent and i < tracer_pellets:
 			ShotFx.tracer(fx_parent, muzzle_at, end, color, tracer_width, tracer_life)
-	fired.emit(best)
+	return best
 
-	# Recoil: the first shots climb, then the burst wanders side to side.
-	var yaw := recoil_yaw_deg * (sin(float(_shot_index) * 0.9) * 0.7 + randf_range(-0.5, 0.5))
-	_shot_index += 1
-	_bloom = minf(bloom_max, _bloom + bloom_per_shot)
-	_flash = 1.0
-	_kick_pos = Vector3(0.0, 0.015, 0.05 + 0.03 * kick_deg)
-	_kick_rot = deg_to_rad(4.0 + 3.0 * kick_deg)
-	return Vector2(kick_deg, yaw)
+func skill(id: String) -> float:
+	return float(effects.get(id, 0))
+
+func reload_multiplier() -> float:
+	var value := 1.0 + 0.1 * skill("reload_speed")
+	if _move > 0.1:
+		value += 0.12 * skill("moving_reload")
+	if kind == &"plasma":
+		value += 0.15 * skill("plasma_reload")
+	if is_instance_valid(wielder):
+		if wielder.dash_bonus > 0.0:
+			value += 0.15 * skill("dash_reload")
+		if wielder.blast_bonus > 0.0:
+			value += 0.3
+	return value
 
 
 func _damage_at(distance: float) -> float:
@@ -295,7 +340,7 @@ func _animate(delta: float) -> void:
 		pos.x = 0.0
 		pos.y -= 0.06
 	# Swap: rises into view.
-	_raise = move_toward(_raise, 0.0, 4.0 * delta)
+	_raise = move_toward(_raise, 0.0, 4.0 * (1.0 + 0.2 * skill("swap_speed")) * delta)
 	pos.y -= 0.25 * _raise * _raise
 	rot.x -= 0.9 * _raise * _raise
 	# Kick: snaps back and up, settles fast.

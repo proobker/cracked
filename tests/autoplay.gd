@@ -17,8 +17,13 @@ var _saved := {}
 
 
 func _ready() -> void:
-	for a in OS.get_cmdline_user_args():
-		_levels.append(int(a))
+	if not Progress.isolated:
+		printerr("Autoplay requires --isolated to protect player progress")
+		get_tree().quit(1)
+		return
+	for a in DeviceTest.user_args():
+		if a.is_valid_int():
+			_levels.append(int(a))
 	if _levels.is_empty():
 		_levels = [1, 10]
 	_saved = Progress.to_dict()
@@ -62,7 +67,13 @@ func _physics_process(delta: float) -> void:
 		return
 	_clock += delta
 	var level := Game.level
-	if _clock > TIMEOUT:
+	# The endless level never clears: it passes once it keeps writing waves.
+	if Levels.is_endless(level) and (_game.get("_director") as WaveDirector).wave >= 4:
+		print("level %d reached wave 4 in %.0f s" % [level, _clock])
+		_done = true
+		_next.call_deferred()
+		return
+	if _clock > (TIMEOUT * 2.0 if level == Levels.FINALE else TIMEOUT):
 		var d: WaveDirector = _game.get("_director")
 		var r: LevelRun = _game.get("_run")
 		_failures.append("level %d: not cleared after %.0f s (room %d, wave %d/%d, state %d, %d alive, %d queued)" % [
@@ -94,9 +105,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _finish() -> void:
-	Progress.unlocked = 1
-	Progress.best.clear()
-	Progress.merge(_saved)
+	Progress.restore(_saved)
+	Audio.stop_all()
 	Engine.time_scale = 1.0
 	for f in _failures:
 		printerr(f)

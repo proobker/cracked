@@ -59,7 +59,10 @@ func _ready() -> void:
 
 
 ## A non-positional sound: the player's own guns, markers, UI.
-func play(sound: StringName, pitch_jitter := 0.04) -> void:
+func play(sound: StringName, pitch_jitter := 0.04, base_pitch := 1.0) -> void:
+	# The headless dummy driver does not drain audio playbacks.
+	if DisplayServer.get_name() == "headless":
+		return
 	var stream := _stream(sound)
 	if stream == null:
 		return
@@ -67,12 +70,15 @@ func play(sound: StringName, pitch_jitter := 0.04) -> void:
 	_next = (_next + 1) % _pool.size()
 	p.stream = stream
 	p.volume_db = TRIM.get(sound, 0.0)
-	p.pitch_scale = 1.0 + randf_range(-pitch_jitter, pitch_jitter)
+	p.pitch_scale = base_pitch + randf_range(-pitch_jitter, pitch_jitter)
 	p.play()
 
 
 ## A sound in the world, so enemies can be located by ear.
 func play_at(sound: StringName, pos: Vector3) -> void:
+	# The headless dummy driver does not drain audio playbacks.
+	if DisplayServer.get_name() == "headless":
+		return
 	var stream := _stream(sound)
 	if stream == null or not is_inside_tree():
 		return
@@ -86,6 +92,9 @@ func play_at(sound: StringName, pos: Vector3) -> void:
 
 
 func play_music(track: StringName) -> void:
+	# The headless dummy driver does not drain audio playbacks.
+	if DisplayServer.get_name() == "headless":
+		return
 	if track == _music_name and _music.playing:
 		return
 	_music_name = track
@@ -98,7 +107,28 @@ func play_music(track: StringName) -> void:
 
 func stop_music() -> void:
 	_music.stop()
+	_music.stream = null
 	_music_name = &""
+
+
+## Release playbacks explicitly before shutdown, including pooled one-shots.
+func stop_all() -> void:
+	if is_instance_valid(_music):
+		_music.stop()
+		_music.stream = null
+	for p in _pool:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+	for p in _pool_3d:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+	_streams.clear()
+
+
+func _exit_tree() -> void:
+	stop_all()
 
 
 ## The track intensifies with the wave number and nothing else (§10):
